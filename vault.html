@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ML Gomes Cofre</title>
+  <link rel="icon" type="image/png" href="img/logo.png" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/vault.css" />
+  <script src="js/theme.js"></script>
+</head>
+<body class="vault-body">
+
+  <header class="topbar">
+    <div class="topbar__brand">
+      <img src="img/logo.png" alt="" class="brand__mark" />
+      <span class="brand__name">ML Cofre</span>
+    </div>
+
+    <label class="search" role="search">
+      <span class="search__icon" aria-hidden="true">&#128269;</span>
+      <input type="search" id="search-input" placeholder="Pesquisar por site, usuário ou URL" autocomplete="off" />
+    </label>
+
+    <div class="topbar__actions">
+      <button class="btn btn--primary" id="btn-new-credential">+ Nova credencial</button>
+      <div class="account-menu">
+        <button class="account-menu__trigger" id="account-menu-trigger" aria-haspopup="true" aria-expanded="false">
+          <span id="account-email">&hellip;</span>
+          <span aria-hidden="true">&#9662;</span>
+        </button>
+        <div class="account-menu__panel" id="account-menu-panel" hidden>
+          <button class="account-menu__item" id="btn-lock-now">Bloquear agora</button>
+          <button class="account-menu__item" id="btn-theme-toggle" data-theme-toggle>Tema claro</button>
+          <button class="account-menu__item" id="btn-change-master">Alterar senha mestra</button>
+          <button class="account-menu__item" id="btn-import">Importar Excel</button>
+          <button class="account-menu__item" id="btn-export">Exportar Excel</button>
+          <button class="account-menu__item" id="btn-backup">Criar backup</button>
+          <button class="account-menu__item" id="btn-restore">Restaurar backup</button>
+          <button class="account-menu__item account-menu__item--danger" id="btn-logout">Sair</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="vault-main">
+    <p class="empty-state" id="empty-state" hidden>
+      Nenhuma credencial ainda. Clique em <strong>+ Nova credencial</strong> para começar.
+    </p>
+    <p class="empty-state" id="no-results" hidden>
+      Nada encontrado para essa busca.
+    </p>
+    <div class="credentials-grid" id="credentials-list" aria-live="polite"></div>
+  </main>
+
+  <!-- MODAL: adicionar / editar credencial -->
+  <div class="modal-backdrop" id="credential-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal__header">
+        <h2 class="modal__title" id="modal-title">Nova credencial</h2>
+        <button class="modal__close" id="modal-close" aria-label="Fechar">&times;</button>
+      </div>
+
+      <form id="credential-form" class="modal__body">
+        <input type="hidden" id="cred-id" />
+
+        <label class="field">
+          <span class="field__label">Nome do site / serviço</span>
+          <input type="text" id="cred-title" required placeholder="Ex.: Gmail, Netflix, Sistema interno" />
+        </label>
+
+        <label class="field">
+          <span class="field__label">Usuário / e-mail</span>
+          <input type="text" id="cred-username" required />
+        </label>
+
+        <label class="field">
+          <span class="field__label">Senha</span>
+          <div class="field__wrap">
+            <input type="password" id="cred-password" required />
+            <button type="button" class="field__toggle" data-toggle-for="cred-password" aria-label="Mostrar senha">&#128065;</button>
+          </div>
+        </label>
+        <div class="field-actions">
+          <button type="button" class="btn btn--ghost btn--small" id="btn-generate-password">Gerar senha</button>
+          <button type="button" class="btn btn--ghost btn--small" id="btn-copy-generated">Copiar</button>
+          <button type="button" class="btn btn--ghost btn--small" id="btn-toggle-generator-options" aria-expanded="false">Opções</button>
+        </div>
+
+        <div class="generator-options" id="generator-options" hidden>
+          <label class="generator-options__length">
+            <span>Tamanho: <strong id="generator-length-value">16</strong></span>
+            <input type="range" id="generator-length" min="8" max="64" value="16" />
+          </label>
+          <div class="generator-options__checks">
+            <label><input type="checkbox" id="generator-upper" checked /> Maiúsculas (A-Z)</label>
+            <label><input type="checkbox" id="generator-lower" checked /> Minúsculas (a-z)</label>
+            <label><input type="checkbox" id="generator-numbers" checked /> Números (0-9)</label>
+            <label><input type="checkbox" id="generator-symbols" checked /> Símbolos (!@#$...)</label>
+          </div>
+        </div>
+
+        <label class="field">
+          <span class="field__label">URL</span>
+          <input type="url" id="cred-url" placeholder="https://" />
+        </label>
+
+        <label class="field">
+          <span class="field__label">Notas <span class="field__optional">(opcional)</span></span>
+          <textarea id="cred-notes" rows="2"></textarea>
+        </label>
+
+        <p class="form-error" id="credential-error" role="alert" hidden></p>
+
+        <div class="modal__footer">
+          <button type="button" class="btn btn--danger" id="btn-delete-credential" hidden>Excluir</button>
+          <div class="modal__footer-right">
+            <button type="button" class="btn btn--ghost" id="btn-cancel-credential">Cancelar</button>
+            <button type="submit" class="btn btn--primary" id="btn-save-credential">Salvar</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" hidden />
+  <input type="file" id="restore-file-input" accept="application/json" hidden />
+
+  <div class="lock-overlay" id="lock-overlay" hidden>
+    <div class="lock-overlay__card">
+      <img src="img/logo.png" alt="" class="brand__mark" />
+      <p class="lock-overlay__title">Cofre bloqueado</p>
+      <p class="lock-overlay__hint">Por inatividade. Digite sua senha mestra para continuar.</p>
+      <form id="unlock-form">
+        <label class="field">
+          <span class="field__label">Senha mestra</span>
+          <input type="password" id="unlock-password" required autocomplete="current-password" autofocus />
+        </label>
+        <p class="form-error" id="unlock-error" role="alert" hidden></p>
+        <button type="submit" class="btn btn--primary">Desbloquear</button>
+        <button type="button" class="btn btn--ghost" id="btn-unlock-logout">Sair</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: alterar senha mestra -->
+  <div class="modal-backdrop" id="change-master-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="change-master-title">
+      <div class="modal__header">
+        <h2 class="modal__title" id="change-master-title">Alterar senha mestra</h2>
+        <button class="modal__close" id="change-master-close" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="change-master-form" class="modal__body">
+        <p class="panel__hint">
+          Isso vai re-criptografar todas as suas credenciais com a nova senha. Não feche esta janela durante o processo.
+        </p>
+        <label class="field">
+          <span class="field__label">Senha mestra atual</span>
+          <input type="password" id="current-master-password" required autocomplete="current-password" />
+        </label>
+        <label class="field">
+          <span class="field__label">Nova senha mestra</span>
+          <input type="password" id="new-master-password" required minlength="8" autocomplete="new-password" />
+        </label>
+        <label class="field">
+          <span class="field__label">Confirmar nova senha mestra</span>
+          <input type="password" id="new-master-password-confirm" required minlength="8" autocomplete="new-password" />
+        </label>
+        <p class="form-error" id="change-master-error" role="alert" hidden></p>
+        <div class="modal__footer">
+          <div class="modal__footer-right">
+            <button type="button" class="btn btn--ghost" id="btn-cancel-change-master">Cancelar</button>
+            <button type="submit" class="btn btn--primary" id="btn-save-change-master">Alterar senha</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+  <script src="js/config.js" defer></script>
+  <script src="js/supabase-client.js" defer></script>
+  <script src="js/crypto.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/generator.js" defer></script>
+  <script src="js/clipboard.js" defer></script>
+  <script src="js/credentials.js" defer></script>
+  <script src="js/import-export.js" defer></script>
+  <script src="js/backup.js" defer></script>
+  <script src="js/autolock.js" defer></script>
+  <script src="js/settings.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ML Gomes Cofre</title>
+  <meta name="description" content="Gerenciador de senhas local-first com criptografia no navegador." />
+  <link rel="icon" type="image/png" href="img/logo.png" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="js/theme.js"></script>
+</head>
+<body>
+
+  <div class="dial" aria-hidden="true">
+    <svg viewBox="0 0 400 400" class="dial__svg">
+      <circle cx="200" cy="200" r="170" class="dial__ring dial__ring--outer" />
+      <circle cx="200" cy="200" r="130" class="dial__ring dial__ring--mid" />
+      <circle cx="200" cy="200" r="90"  class="dial__ring dial__ring--inner" />
+      <line x1="200" y1="30" x2="200" y2="60" class="dial__tick" />
+      <line x1="200" y1="340" x2="200" y2="370" class="dial__tick" />
+      <line x1="30" y1="200" x2="60" y2="200" class="dial__tick" />
+      <line x1="340" y1="200" x2="370" y2="200" class="dial__tick" />
+    </svg>
+  </div>
+
+  <button class="btn btn--ghost btn--small theme-toggle-fixed" data-theme-toggle>Tema claro</button>
+
+  <main class="screen">
+    <header class="brand">
+      <img src="img/logo.png" alt="" class="brand__mark" />
+      <span class="brand__name">Cofre</span>
+    </header>
+
+    <section class="card" role="region" aria-label="Acesso ao cofre">
+
+      <div class="tabs" role="tablist">
+        <button class="tab is-active" id="tab-login" role="tab" aria-selected="true" aria-controls="panel-login" data-target="panel-login">
+          Entrar
+        </button>
+        <button class="tab" id="tab-signup" role="tab" aria-selected="false" aria-controls="panel-signup" data-target="panel-signup">
+          Criar cofre
+        </button>
+      </div>
+
+      <!-- PAINEL: LOGIN -->
+      <form class="panel is-active" id="panel-login" role="tabpanel" aria-labelledby="tab-login">
+        <p class="panel__hint">Sua senha mestra nunca sai deste navegador.</p>
+
+        <label class="field">
+          <span class="field__label">E-mail</span>
+          <input type="email" name="email" id="login-email" autocomplete="username" required />
+        </label>
+
+        <label class="field">
+          <span class="field__label">Senha mestra</span>
+          <div class="field__wrap">
+            <input type="password" name="password" id="login-password" autocomplete="current-password" required minlength="8" />
+            <button type="button" class="field__toggle" data-toggle-for="login-password" aria-label="Mostrar senha">&#128065;</button>
+          </div>
+        </label>
+
+        <p class="form-error" id="login-error" role="alert" hidden></p>
+
+        <button type="submit" class="btn btn--primary" id="login-submit">
+          Entrar no cofre
+        </button>
+      </form>
+
+      <!-- PAINEL: CRIAR COFRE -->
+      <form class="panel" id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" hidden>
+        <p class="panel__hint">Escolha uma senha mestra forte — ela não pode ser recuperada se você a esquecer.</p>
+
+        <label class="field">
+          <span class="field__label">E-mail</span>
+          <input type="email" name="email" id="signup-email" autocomplete="username" required />
+        </label>
+
+        <label class="field">
+          <span class="field__label">Senha mestra</span>
+          <div class="field__wrap">
+            <input type="password" name="password" id="signup-password" autocomplete="new-password" required minlength="8" />
+            <button type="button" class="field__toggle" data-toggle-for="signup-password" aria-label="Mostrar senha">&#128065;</button>
+          </div>
+        </label>
+
+        <label class="field">
+          <span class="field__label">Confirmar senha mestra</span>
+          <input type="password" name="password_confirm" id="signup-password-confirm" autocomplete="new-password" required minlength="8" />
+        </label>
+
+        <div class="strength" aria-hidden="true">
+          <span class="strength__bar" id="strength-bar"></span>
+        </div>
+        <p class="strength__label" id="strength-label">&nbsp;</p>
+
+        <p class="form-error" id="signup-error" role="alert" hidden></p>
+
+        <button type="submit" class="btn btn--primary" id="signup-submit">
+          Criar cofre
+        </button>
+      </form>
+
+    </section>
+
+    <p class="footnote">Criptografia AES-256 local &middot; nada é enviado sem antes ser cifrado</p>
+  </main>
+
+  <!-- auth.js liga o cadastro/login ao Supabase; ui-tabs.js cuida só do visual. -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="js/config.js" defer></script>
+  <script src="js/supabase-client.js" defer></script>
+  <script src="js/crypto.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/ui-tabs.js" defer></script>
+</body>
+</html>
