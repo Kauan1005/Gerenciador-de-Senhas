@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Política de privacidade · Arca</title>
+  <link rel="icon" type="image/svg+xml" href="img/logo.svg" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/privacy.css" />
+</head>
+<body>
+  <main class="legal">
+    <p><a href="index.html">&larr; Voltar para a Arca</a></p>
+    <h1>Política de privacidade da Arca</h1>
+    <p class="legal__date">Atualizada em novembro de 2026</p>
+
+    <p>A Arca é um gerenciador pessoal de senhas e de projetos. Ela foi feita para que o serviço não consiga ler o que você guarda.
+    Esta página explica, em linguagem simples, o que acontece com os seus dados.</p>
+
+    <h2>O que a Arca guarda</h2>
+    <ul>
+      <li><strong>Seu e-mail de cadastro</strong>, usado só para entrar na sua conta.</li>
+      <li><strong>Suas senhas, seus projetos e os arquivos dos projetos</strong>, sempre <strong>cifrados no seu navegador</strong> (AES-256) com a sua
+      senha mestra antes de saírem do seu dispositivo. O servidor guarda apenas dados ilegíveis.</li>
+      <li>A <strong>senha mestra nunca é enviada</strong> a ninguém e não pode ser recuperada. Se você a perder, os dados não podem ser lidos.</li>
+    </ul>
+
+    <h2>Onde ficam os dados</h2>
+    <p>Os registros cifrados ficam em um banco de dados do Supabase. A hospedagem do site é feita pelo Netlify.
+    A Arca não usa anúncios, rastreadores nem ferramentas de análise, e não vende nem compartilha dados com terceiros.</p>
+
+    <h2>Conexão com o Google Drive (opcional)</h2>
+    <p>Se você escolher conectar sua conta Google, a Arca guarda os <strong>arquivos dos seus projetos no seu próprio Google Drive</strong>.</p>
+    <ul>
+      <li>O acesso é pedido só com a permissão <code>drive.file</code>: a Arca vê <strong>apenas os arquivos que ela mesma criou</strong>, numa pasta chamada
+      "Arca (arquivos cifrados)". Ela não consegue listar, ler ou alterar nenhum outro arquivo do seu Drive.</li>
+      <li>Os arquivos já chegam ao Google <strong>cifrados</strong> e com nomes sem significado.</li>
+      <li>Da sua conta Google, a Arca lê apenas o <strong>e-mail e o nome</strong> (para mostrar qual conta está conectada) e o <strong>espaço livre</strong> do Drive.</li>
+      <li>O token de acesso do Google fica <strong>somente na memória do navegador</strong>, por cerca de uma hora. Ele não é gravado em disco nem enviado aos servidores da Arca.</li>
+      <li>O uso das informações recebidas das APIs do Google segue a
+      <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener noreferrer">Política de Dados do Usuário dos Serviços de API do Google</a>,
+      incluindo os requisitos de Uso Limitado.</li>
+    </ul>
+    <p>Para revogar o acesso a qualquer momento, use o botão <strong>Desconectar</strong> na aba Arquivos ou a página
+    <a href="https://myaccount.google.com/permissions" rel="noopener noreferrer">myaccount.google.com/permissions</a>.
+    Os arquivos já enviados continuam no seu Drive até você apagá-los.</p>
+
+    <h2>Seus direitos</h2>
+    <p>Você pode exportar seus dados (menu da conta) e pedir a exclusão da sua conta e dos registros dela. Para isso, ou para qualquer dúvida,
+    escreva para <a href="mailto:kauanribalmeida@gmail.com">kauanribalmeida@gmail.com</a>.</p>
+
+    <h2>Mudanças</h2>
+    <p>Se esta política mudar, a data no topo será atualizada.</p>
+  </main>
+</body>
+</html>

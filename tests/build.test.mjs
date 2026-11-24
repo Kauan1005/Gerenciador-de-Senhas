@@ -23,7 +23,7 @@ ok(headers.includes("connect-src 'self' https://abcdefghij.supabase.co") && !hea
 const cfg = readFileSync(join(dist, "js", "config.js"), "utf8");
 ok(cfg.includes("abcdefghij.supabase.co") && /"KDF_ITERATIONS": 600000/.test(cfg) && /"LEGACY_LOGIN": true/.test(cfg) && /"SESSION_STORE": "tab"/.test(cfg), "o config.js gerado traz os padrões seguros (600 mil iterações, sessão só na aba)");
 
-ok(!headers.includes("googleapis") && !headers.includes("__GOOGLE") && /"GOOGLE_CLIENT_ID": ""/.test(cfg) && all.includes("google-callback.html"), "sem GOOGLE_CLIENT_ID a CSP não libera o Google (os arquivos ficam no Supabase)");
+ok(!headers.includes("googleapis") && !headers.includes("__GOOGLE") && /"GOOGLE_CLIENT_ID": ""/.test(cfg) && all.includes("google-callback.html") && all.includes("privacidade.html") && all.includes("css/privacy.css"), "sem GOOGLE_CLIENT_ID a CSP não libera o Google (os arquivos ficam no Supabase)");
 
 const GID = "123456789-abcdef.apps.googleusercontent.com";
 const withG = run({ SUPABASE_URL: "https://abcdefghij.supabase.co", SUPABASE_ANON_KEY: jwt("anon"), GOOGLE_CLIENT_ID: GID });

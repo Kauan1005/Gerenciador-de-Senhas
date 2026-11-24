@@ -16,7 +16,7 @@ const dist = join(root, "dist");
 // Apaga o dist/ anterior ANTES de validar: se o build falhar, não sobra uma versão velha para alguém publicar sem querer.
 rmSync(dist, { recursive: true, force: true });
 
-const PUBLISH = ["index.html", "vault.html", "projects.html", "google-callback.html", "css", "img", "vendor"];
+const PUBLISH = ["index.html", "vault.html", "projects.html", "google-callback.html", "privacidade.html", "css", "img", "vendor"];
 const JS_FILES = [
   "theme.js", "ui-tabs.js", "crypto.js", "supabase-client.js", "auth.js", "session.js", "vault-data.js", "generator.js",
   "clipboard.js", "credentials.js", "import-export.js", "backup.js", "autolock.js", "settings.js", "google-drive.js", "google-callback.js",

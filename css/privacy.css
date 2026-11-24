@@ -1,0 +1,16 @@
+/* Página de política de privacidade (texto corrido). */
+body { overflow-y: auto; }
+.legal {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-6, 32px) var(--space-4, 16px) 64px;
+  line-height: 1.65;
+  font-size: 15px;
+}
+.legal h1 { font-family: var(--font-display); font-size: 28px; font-weight: 500; margin: var(--space-4, 16px) 0 4px; }
+.legal h2 { font-family: var(--font-display); font-size: 19px; font-weight: 500; margin: 28px 0 8px; }
+.legal__date { color: var(--text-dim); font-size: 13px; margin: 0 0 20px; }
+.legal ul { padding-left: 20px; }
+.legal li { margin-bottom: 8px; }
+.legal a { color: var(--accent-dim, inherit); }
+.legal code { font-size: 13px; }

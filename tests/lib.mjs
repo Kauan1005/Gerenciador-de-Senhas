@@ -9,7 +9,7 @@ export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const FAKE_HOST = "fake.supabase.test";
 
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".png": "image/png", ".json": "application/json", ".txt": "text/plain" };
-const PUBLIC = [/^\/(index|vault|projects|google-callback)\.html$/, /^\/css\//, /^\/img\//, /^\/vendor\//, /^\/js\/(?!config)/];
+const PUBLIC = [/^\/(index|vault|projects|google-callback|privacidade)\.html$/, /^\/css\//, /^\/img\//, /^\/vendor\//, /^\/js\/(?!config)/];
 
 // Lê o primeiro bloco ("/*") do _headers, trocando o host do Supabase.
 export function securityHeaders(google = false) {
