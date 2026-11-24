@@ -210,3 +210,6 @@ O cofre usa uma chave aleatória (DEK) que cifra tudo. Ela fica guardada **embru
 - Sem a senha mestra **e** sem a chave de recuperação, os dados não podem ser lidos por ninguém.
 - No Supabase, em *Authentication > URL Configuration*, o **Site URL** deve ser o endereço do site e `https://SEU-SITE/recovery.html` precisa estar
   em *Redirect URLs*, senão o link do e-mail não volta para a tela de recuperação.
+
+**Perdeu a chave de recuperação?** Se você ainda sabe a senha mestra, entre no cofre e use, no menu da conta, **Gerar nova chave de recuperação**
+(pede a senha mestra). A chave antiga deixa de valer, e nada é re-cifrado. Se perder a senha mestra **e** a chave de recuperação, não há como abrir o cofre.

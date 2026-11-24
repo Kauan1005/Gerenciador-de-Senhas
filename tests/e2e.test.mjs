@@ -467,12 +467,25 @@ try {
     await ctx.close();
   }
 
-  // ================= 5d) conta ANTIGA real (DEK): a chave de recuperação que já existe continua valendo
+  // ================= 5d) conta ANTIGA real (DEK): gerar chave de recuperação nova e recuperar com ela
   {
     const seed = await legacyAccount({ schema: { itemVersion: true, authVersion: true, projects: true }, items: [{ title: "Do formato real", username: "u", password: "p-real-1", url: "", notes: "" }] });
     const { ctx, page } = await open({ seed });
     await login(page);
     ok(await until(async () => (await cards(page)).includes("Do formato real")), "conta real (DEK): abre com a senha mestra de sempre");
+    // perdeu a chave de recuperação: gera outra de dentro do cofre (exige a senha mestra)
+    await menu(page, "btn-new-recovery");
+    await page.locator("#reauth-modal").waitFor({ state: "visible" });
+    await page.fill("#reauth-password", "errada-errada-123");
+    await page.press("#reauth-password", "Enter");
+    ok(await until(async () => /incorreta/.test(await toast(page))), "nova chave de recuperação: senha mestra errada é recusada e nada muda");
+    await menu(page, "btn-new-recovery");
+    await page.locator("#reauth-modal").waitFor({ state: "visible" });
+    await page.fill("#reauth-password", MASTER);
+    await page.press("#reauth-password", "Enter");
+    const newCode = await confirmRecovery(page);
+    const cfgNew = (await db(page)).tables.vault_config[0];
+    ok(/^([0-9A-F]{4}-){15}[0-9A-F]{4}$/.test(newCode) && newCode !== seed.recoveryCode && !JSON.stringify(await db(page)).includes(newCode) && cfgNew.recovery_wrapped_dek !== seed.__oldRec, "nova chave de recuperação gerada (a senha mestra e os dados não mudaram); o servidor não guarda a chave em texto");
     await menu(page, "btn-change-master");
     await page.fill("#current-master-password", MASTER);
     await page.fill("#new-master-password", "Senha-Trocada-Pos-Migracao-3");
@@ -488,8 +501,11 @@ try {
     await page.fill("#recovery-new-password", "Outra-Depois-Da-Troca-8");
     await page.fill("#recovery-new-password-confirm", "Outra-Depois-Da-Troca-8");
     await page.click("#recovery-submit");
+    ok(await until(async () => (await page.locator("#recovery-error").innerText()).includes("incorreta")), "a chave de recuperação ANTIGA deixa de valer depois de gerar a nova");
+    await page.fill("#recovery-code-input", newCode);
+    await page.click("#recovery-submit");
     await page.waitForURL("**/vault.html");
-    ok(await until(async () => (await cards(page)).includes("Do formato real")), "a chave de recuperação ORIGINAL continua valendo depois de trocar a senha mestra");
+    ok(await until(async () => (await cards(page)).includes("Do formato real")), "a chave NOVA continua valendo depois de trocar a senha mestra e recupera o cofre");
     await ctx.close();
   }
 

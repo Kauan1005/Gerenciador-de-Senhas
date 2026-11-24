@@ -314,7 +314,7 @@ const AuthModule = (() => {
     }
   }
 
-  return { handleSignUp, handleLogin, handleForgotPassword, fetchVaultConfig, unwrapDek, unlockWithConfig, needsKdfUpgrade, createVaultConfig };
+  return { showRecoveryCodeModal, handleSignUp, handleLogin, handleForgotPassword, fetchVaultConfig, unwrapDek, unlockWithConfig, needsKdfUpgrade, createVaultConfig };
 })();
 window.AuthModule = AuthModule;
 

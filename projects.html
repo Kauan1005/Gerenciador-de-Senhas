@@ -9,6 +9,32 @@
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/vault.css" />
   <link rel="stylesheet" href="css/projects.css" />
+    <!-- MODAL: chave de recuperação nova (mostrada uma única vez) -->
+  <div class="modal-backdrop" id="recovery-code-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="recovery-code-title">
+      <div class="modal__header">
+        <h2 class="modal__title" id="recovery-code-title">Guarde sua chave de recuperação</h2>
+      </div>
+      <div class="modal__body">
+        <p class="panel__hint">
+          Se você esquecer a senha mestra, só esta chave permite recuperar o cofre sem perder as credenciais salvas.
+          Ela <strong>não será mostrada de novo</strong>. A chave antiga deixa de valer. Anote em papel ou guarde no seu
+          gerenciador de senhas, não só neste computador.
+        </p>
+        <p class="recovery-code" id="recovery-code-display"></p>
+        <label class="checkbox-field">
+          <input type="checkbox" id="recovery-code-confirm" />
+          Eu salvei minha chave de recuperação em um local seguro.
+        </label>
+      </div>
+      <div class="modal__footer">
+        <div class="modal__footer-right">
+          <button type="button" class="btn btn--primary" id="recovery-code-continue" disabled>Continuar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="js/theme.js"></script>
 </head>
 <body class="vault-body">
@@ -40,6 +66,7 @@
           <button class="account-menu__item" id="btn-lock-now">Bloquear agora</button>
           <button class="account-menu__item" id="btn-theme-toggle" data-theme-toggle>Tema claro</button>
           <button class="account-menu__item" id="btn-change-master">Alterar senha mestra</button>
+          <button class="account-menu__item" id="btn-new-recovery">Gerar nova chave de recuperação</button>
           <button class="account-menu__item" id="btn-backup">Criar backup</button>
           <button class="account-menu__item" id="btn-restore">Restaurar backup</button>
           <button class="account-menu__item account-menu__item--danger" id="btn-logout">Sair</button>

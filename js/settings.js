@@ -84,6 +84,33 @@ async function handleChangeMasterPassword(currentPassword, newPassword, newPassw
   }
 }
 
+// Gera uma chave de recuperação NOVA (a antiga deixa de valer). Pede a senha mestra: é ela que abre a DEK.
+async function handleNewRecoveryKey() {
+  if (!window.confirm("Vamos gerar uma chave de recuperação nova. A antiga (se ainda existir) deixa de valer. Continuar?")) return;
+  const password = await askPasswordValue("Digite a senha mestra para gerar a nova chave de recuperação.");
+  if (!password) return;
+  try {
+    const config = await AuthModule.fetchVaultConfig(VaultSession.userId);
+    const dekBuf = await AuthModule.unwrapDek(password, config);
+    if (!dekBuf) return toast("Senha mestra incorreta.");
+
+    const code = CryptoUtil.generateRecoveryCode();
+    const recoveryKek = await CryptoUtil.importRawAesKey(CryptoUtil.recoveryCodeToKeyBytes(code), false);
+    const { wrapped, iv } = await CryptoUtil.wrapBytes(recoveryKek, dekBuf);
+    const { error } = await sb
+      .from("vault_config")
+      .update({ recovery_wrapped_dek: wrapped, recovery_wrapped_dek_iv: iv })
+      .eq("user_id", VaultSession.userId);
+    if (error) throw error;
+    VaultSession.config = { ...config, recovery_wrapped_dek: wrapped, recovery_wrapped_dek_iv: iv };
+    await AuthModule.showRecoveryCodeModal(code);
+    toast("Chave de recuperação nova ativada.");
+  } catch (err) {
+    console.error(err);
+    toast("Não foi possível gerar a chave agora. A anterior continua valendo.");
+  }
+}
+
 // "Reforçar criptografia": mesma senha, derivação com mais iterações e sal novo.
 async function handleUpgradeKdf() {
   if (!AuthModule.needsKdfUpgrade(VaultSession.config)) {
@@ -155,6 +182,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("change-master-form");
 
   document.getElementById("btn-upgrade-kdf")?.addEventListener("click", handleUpgradeKdf);
+  document.getElementById("btn-new-recovery")?.addEventListener("click", handleNewRecoveryKey);
 
   if (!openBtn) return;
 
