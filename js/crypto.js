@@ -5,13 +5,15 @@
    A senha mestra nunca é enviada a lugar nenhum: dela saem DUAS
    coisas independentes, derivadas com sais diferentes:
 
-     1) chave de cifra (AES-256-GCM, não exportável) = PBKDF2(senha, sal do cofre)
-        -> cifra credenciais e projetos. Fica só na memória da aba.
+     1) KEK = PBKDF2(senha, sal do cofre): só "desembrulha" a DEK, a chave
+        AES-256 aleatória que de fato cifra credenciais, projetos e a chave
+        de cada arquivo. A DEK fica só na memória da aba.
      2) segredo de login = PBKDF2(senha, sal fixo do e-mail)
         -> é ISTO que vai ao Supabase Auth no lugar da senha.
 
    Assim o servidor nunca recebe a senha mestra (versão antiga do app
-   enviava a própria senha ao fazer login).
+   enviava a própria senha ao fazer login). A DEK também é guardada
+   embrulhada pela chave de recuperação (ver generateRecoveryCode).
 
    Formato dos dados cifrados:
      versão 1: AES-GCM sem dados associados (AAD)  [contas antigas]
@@ -23,9 +25,6 @@
 const CryptoUtil = (() => {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
-
-  // String fixa usada apenas para validar a senha mestra no login.
-  const VERIFIER_PLAINTEXT = "COFRE_VERIFICADO_v1";
 
   // Piso de iterações aceito vindo do servidor: impede que um servidor
   // comprometido "enfraqueça" a derivação devolvendo um número pequeno.
@@ -116,7 +115,7 @@ const CryptoUtil = (() => {
 
   /* ---------- AES-GCM ---------- */
 
-  // AAD da versão 2. kind: "item" | "project" | "verifier".
+  // AAD da versão 2. kind: "item" | "project" | "file".
   function aadFor(version, userId, kind, id) {
     if (version < 2) return undefined;
     return encoder.encode(`cofre/v2|${userId}|${kind}|${id || ""}`);
@@ -145,18 +144,51 @@ const CryptoUtil = (() => {
     return JSON.parse(await decryptText(key, ciphertextBase64, ivBase64, aad));
   }
 
-  async function createVerifier(key) {
-    const { ciphertext, iv } = await encryptText(key, VERIFIER_PLAINTEXT);
-    return { verifier: ciphertext, verifier_iv: iv };
+  /* ---------- DEK (chave real do cofre) e chave de recuperação ----------
+     A DEK é uma chave AES-256 ALEATÓRIA, gerada uma vez. Ela é que cifra tudo.
+     Fica guardada "embrulhada" (cifrada) de duas formas:
+       - pela KEK da senha mestra  (PBKDF2)          -> uso normal
+       - pela chave de recuperação (256 bits, anotada) -> emergência
+     Trocar a senha mestra = embrulhar a MESMA DEK de novo: nada é re-cifrado. */
+
+  function generateDEK() {
+    return crypto.getRandomValues(new Uint8Array(32)).buffer;
   }
 
-  // Retorna true/false: nunca lança erro para quem chamou.
-  async function checkVerifier(key, verifierBase64, verifierIvBase64) {
+  // Importa bytes brutos como chave AES-GCM (não exportável por padrão).
+  async function importRawAesKey(raw, extractable = false) {
+    return crypto.subtle.importKey("raw", raw, { name: "AES-GCM", length: 256 }, extractable, ["encrypt", "decrypt"]);
+  }
+
+  async function wrapBytes(kek, plainBuf) {
+    const ivBase64 = generateIvBase64();
+    const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv: base64ToBuf(ivBase64) }, kek, plainBuf);
+    return { wrapped: bufToBase64(cipher), iv: ivBase64 };
+  }
+
+  // Devolve null (nunca lança) se a KEK estiver errada: a tag de autenticação falha.
+  async function unwrapBytes(kek, wrappedBase64, ivBase64) {
     try {
-      return (await decryptText(key, verifierBase64, verifierIvBase64)) === VERIFIER_PLAINTEXT;
+      return await crypto.subtle.decrypt({ name: "AES-GCM", iv: base64ToBuf(ivBase64) }, kek, base64ToBuf(wrappedBase64));
     } catch (err) {
-      return false; // a tag de autenticação falha quando a chave está errada
+      return null;
     }
+  }
+
+  const toHex = (buf) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
+
+  // Chave de recuperação: 256 bits em grupos de 4 hexadecimais ("A1B2-C3D4-...").
+  function generateRecoveryCode() {
+    return toHex(crypto.getRandomValues(new Uint8Array(32)).buffer).toUpperCase().match(/.{1,4}/g).join("-");
+  }
+
+  // Devolve os 32 bytes da chave digitada, ou null se o formato não bate.
+  function recoveryCodeToKeyBytes(code) {
+    const hex = String(code || "").replace(/[^0-9a-fA-F]/g, "");
+    if (hex.length !== 64) return null;
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+    return bytes.buffer;
   }
 
   /* ---------- arquivos (projetos instaláveis) ---------- */
@@ -288,8 +320,12 @@ const CryptoUtil = (() => {
     decryptText,
     encryptJSON,
     decryptJSON,
-    createVerifier,
-    checkVerifier,
+    generateDEK,
+    importRawAesKey,
+    wrapBytes,
+    unwrapBytes,
+    generateRecoveryCode,
+    recoveryCodeToKeyBytes,
     generateFileKey,
     importFileKey,
     encryptFile,

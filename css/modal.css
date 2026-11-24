@@ -1,0 +1,48 @@
+/* Janela de diálogo mínima para as telas de login e recuperação (chave de recuperação mostrada no cadastro). */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 11, 14, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  z-index: 50;
+}
+.modal-backdrop[hidden] { display: none; }
+.modal {
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.modal__header { padding: var(--space-4); border-bottom: 1px solid var(--border); }
+.modal__title { margin: 0; font-family: var(--font-display); font-size: 18px; font-weight: 500; }
+.modal__body { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+.modal__footer { padding: var(--space-3) var(--space-4) var(--space-4); display: flex; }
+.modal__footer-right { display: flex; gap: var(--space-2); margin-left: auto; }
+
+/* ---------- chave de recuperação ---------- */
+.recovery-code {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  line-height: 1.6;
+  word-break: break-all;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin: 0;
+  user-select: all;
+}
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.checkbox-field input { accent-color: var(--accent); }

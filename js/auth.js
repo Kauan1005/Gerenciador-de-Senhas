@@ -2,10 +2,10 @@
    AUTH MODULE
    ==========================================================
    Estado do cofre em memória (nunca em localStorage/cookie):
-     VaultSession.key    -> CryptoKey AES-GCM derivada da senha mestra
+     VaultSession.key    -> CryptoKey AES-GCM (a DEK, chave real do cofre)
      VaultSession.userId -> uuid do usuário no Supabase
      VaultSession.email  -> e-mail (só para exibir na UI)
-     VaultSession.config -> linha de vault_config (sal, iterações...)
+     VaultSession.config -> linha de vault_config (sal, iterações, DEK embrulhada...)
 
    Login v2: o que vai ao Supabase Auth NÃO é a senha mestra, e sim um
    segredo derivado dela (CryptoUtil.deriveAuthSecret). A senha mestra
@@ -47,40 +47,63 @@ const AuthModule = (() => {
 
   const isMissingColumn = (error) => !!error && (error.code === "42703" || /auth_version|does not exist/i.test(error.message || ""));
 
+  const CONFIG_COLS = "salt, kdf_iterations, wrapped_dek, wrapped_dek_iv, recovery_wrapped_dek, recovery_wrapped_dek_iv";
+
   async function fetchVaultConfig(userId) {
-    let q = await sb
-      .from("vault_config")
-      .select("salt, kdf_iterations, verifier, verifier_iv, auth_version")
-      .eq("user_id", userId)
-      .maybeSingle();
+    let q = await sb.from("vault_config").select(CONFIG_COLS + ", auth_version").eq("user_id", userId).maybeSingle();
     if (isMissingColumn(q.error)) {
       // banco ainda sem a coluna nova: segue com o formato antigo
-      q = await sb.from("vault_config").select("salt, kdf_iterations, verifier, verifier_iv").eq("user_id", userId).maybeSingle();
+      q = await sb.from("vault_config").select(CONFIG_COLS).eq("user_id", userId).maybeSingle();
     }
     if (q.error) throw q.error;
     return q.data;
   }
 
-  // Gera sal novo, deriva a chave e grava o verificador cifrado no Supabase.
+  // Gera a DEK (chave real do cofre), embrulha com a KEK da senha mestra e com uma chave de recuperação nova,
+  // e grava tudo. A chave de recuperação em texto só existe aqui, na memória, para ser mostrada UMA vez.
   async function createVaultConfig(userId, masterPassword) {
     const salt = CryptoUtil.generateSaltBase64();
     const iterations = window.APP_CONFIG.KDF_ITERATIONS || CryptoUtil.DEFAULT_KDF_ITERATIONS;
-    const key = await CryptoUtil.deriveKey(masterPassword, salt, iterations);
-    const { verifier, verifier_iv } = await CryptoUtil.createVerifier(key);
-    const row = { user_id: userId, salt, kdf_iterations: iterations, verifier, verifier_iv, auth_version: 2 };
+    const kek = await CryptoUtil.deriveKey(masterPassword, salt, iterations);
+
+    const dekBuf = CryptoUtil.generateDEK();
+    const key = await CryptoUtil.importRawAesKey(dekBuf, false);
+    const own = await CryptoUtil.wrapBytes(kek, dekBuf);
+
+    const recoveryCode = CryptoUtil.generateRecoveryCode();
+    const recoveryKek = await CryptoUtil.importRawAesKey(CryptoUtil.recoveryCodeToKeyBytes(recoveryCode), false);
+    const rec = await CryptoUtil.wrapBytes(recoveryKek, dekBuf);
+
+    const row = {
+      user_id: userId,
+      salt,
+      kdf_iterations: iterations,
+      wrapped_dek: own.wrapped,
+      wrapped_dek_iv: own.iv,
+      recovery_wrapped_dek: rec.wrapped,
+      recovery_wrapped_dek_iv: rec.iv,
+      auth_version: 2
+    };
     let { error } = await sb.from("vault_config").insert(row);
     if (isMissingColumn(error)) {
       delete row.auth_version;
       ({ error } = await sb.from("vault_config").insert(row));
     }
     if (error) throw error;
-    return { key, config: { salt, kdf_iterations: iterations, verifier, verifier_iv, auth_version: 2 } };
+    const { user_id, ...config } = row;
+    return { key, config, recoveryCode };
+  }
+
+  // Bytes da DEK, ou null se a senha estiver errada (nunca lança por senha errada).
+  async function unwrapDek(masterPassword, config) {
+    if (!config || !config.wrapped_dek) return null;
+    const kek = await CryptoUtil.deriveKey(masterPassword, config.salt, config.kdf_iterations);
+    return CryptoUtil.unwrapBytes(kek, config.wrapped_dek, config.wrapped_dek_iv);
   }
 
   async function unlockWithConfig(masterPassword, config) {
-    const key = await CryptoUtil.deriveKey(masterPassword, config.salt, config.kdf_iterations);
-    const ok = await CryptoUtil.checkVerifier(key, config.verifier, config.verifier_iv);
-    return ok ? key : null;
+    const dekBuf = await unwrapDek(masterPassword, config);
+    return dekBuf ? CryptoUtil.importRawAesKey(dekBuf, false) : null;
   }
 
   // O cofre foi criado com menos iterações do que o padrão atual?
@@ -116,6 +139,33 @@ const AuthModule = (() => {
     attempts.until = 0;
   }
 
+  // Mostra a chave de recuperação uma única vez e só segue quando a pessoa confirma que guardou.
+  function showRecoveryCodeModal(code) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById("recovery-code-modal");
+      const display = document.getElementById("recovery-code-display");
+      const checkbox = document.getElementById("recovery-code-confirm");
+      const continueBtn = document.getElementById("recovery-code-continue");
+      if (!modal) return resolve();
+
+      display.textContent = code;
+      checkbox.checked = false;
+      continueBtn.disabled = true;
+      modal.hidden = false;
+
+      const onCheck = () => { continueBtn.disabled = !checkbox.checked; };
+      const onContinue = () => {
+        checkbox.removeEventListener("change", onCheck);
+        continueBtn.removeEventListener("click", onContinue);
+        display.textContent = "";
+        modal.hidden = true;
+        resolve();
+      };
+      checkbox.addEventListener("change", onCheck);
+      continueBtn.addEventListener("click", onContinue);
+    });
+  }
+
   /* ---------- cadastro ---------- */
 
   async function handleSignUp(email, password, passwordConfirm) {
@@ -145,7 +195,8 @@ const AuthModule = (() => {
 
       if (data.session && data.user) {
         // Confirmação de e-mail desativada no projeto: já há sessão, configura agora.
-        const { key, config } = await createVaultConfig(data.user.id, password);
+        const { key, config, recoveryCode } = await createVaultConfig(data.user.id, password);
+        await showRecoveryCodeModal(recoveryCode);
         VaultSession.key = key;
         VaultSession.config = config;
         VaultSession.userId = data.user.id;
@@ -196,7 +247,10 @@ const AuthModule = (() => {
       let usedConfig = config;
       if (!config) {
         // Primeiro login após confirmar e-mail: finaliza a configuração do cofre agora.
-        ({ key, config: usedConfig } = await createVaultConfig(userId, password));
+        const created = await createVaultConfig(userId, password);
+        key = created.key;
+        usedConfig = created.config;
+        await showRecoveryCodeModal(created.recoveryCode);
       } else {
         key = await unlockWithConfig(password, config);
         if (!key) {
@@ -238,13 +292,40 @@ const AuthModule = (() => {
     }
   }
 
-  return { handleSignUp, handleLogin, fetchVaultConfig, unlockWithConfig, needsKdfUpgrade, createVaultConfig };
+  // Manda o e-mail de redefinição do Supabase. A tela recovery.html pede a chave de recuperação e define a nova senha mestra.
+  async function handleForgotPassword(email) {
+    const messageEl = document.getElementById("forgot-password-message");
+    if (!email) {
+      messageEl.textContent = "Preencha seu e-mail no campo acima primeiro.";
+      messageEl.hidden = false;
+      return;
+    }
+    const btn = document.getElementById("btn-forgot-password");
+    btn.disabled = true;
+    try {
+      await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/recovery.html" });
+    } catch (err) {
+      console.error(err);
+      // mesmo texto em caso de erro: não revela se o e-mail tem cofre
+    } finally {
+      btn.disabled = false;
+      messageEl.textContent = "Se esse e-mail tiver um cofre, enviamos um link de recuperação.";
+      messageEl.hidden = false;
+    }
+  }
+
+  return { handleSignUp, handleLogin, handleForgotPassword, fetchVaultConfig, unwrapDek, unlockWithConfig, needsKdfUpgrade, createVaultConfig };
 })();
 window.AuthModule = AuthModule;
 
 document.addEventListener("DOMContentLoaded", () => {
   const loginForm = document.getElementById("panel-login");
   const signupForm = document.getElementById("panel-signup");
+  const forgotBtn = document.getElementById("btn-forgot-password");
+
+  if (forgotBtn) {
+    forgotBtn.addEventListener("click", () => AuthModule.handleForgotPassword(document.getElementById("login-email").value.trim()));
+  }
 
   if (loginForm) {
     loginForm.addEventListener("submit", (e) => {

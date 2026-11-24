@@ -9,10 +9,9 @@
 -- tabelas do cofre, removendo qualquer regra antiga mais frouxa.
 --
 -- O que ele garante:
---   vault_config   (1 linha por usuário: sal, iterações, verificador)
+--   vault_config   (1 linha por usuário: sal, iterações, chave do cofre (DEK) embrulhada pela senha mestra e pela chave de recuperação)
 --   vault_items    (credenciais já cifradas no navegador)
 --   vault_projects (projetos já cifrados no navegador)  <- NOVO
---   rotate_vault() (troca de senha mestra em UMA transação) <- NOVO
 --   bucket privado "project-files" (arquivos cifrados dos projetos) <- NOVO
 --   RLS: cada usuário só enxerga e altera as PRÓPRIAS linhas/arquivos.
 --
@@ -26,12 +25,15 @@ create table if not exists public.vault_config (
   user_id        uuid primary key references auth.users (id) on delete cascade default auth.uid(),
   salt           text    not null,
   kdf_iterations integer not null,
-  verifier       text    not null,
-  verifier_iv    text    not null,
+  wrapped_dek             text not null,
+  wrapped_dek_iv          text not null,
+  recovery_wrapped_dek    text,
+  recovery_wrapped_dek_iv text,
   auth_version   smallint not null default 1,
   created_at     timestamptz not null default now()
 );
 
+-- bancos criados antes: estas colunas já existem (formato com DEK + chave de recuperação); só garante as novas
 alter table public.vault_config add column if not exists auth_version smallint not null default 1;
 alter table public.vault_config add column if not exists created_at timestamptz not null default now();
 alter table public.vault_config alter column user_id set default auth.uid();
@@ -165,59 +167,9 @@ grant select, insert, update, delete  on public.vault_items    to authenticated;
 grant select, insert, update, delete  on public.vault_projects to authenticated;
 
 -- ------------------------------------------------------------
--- 6) rotate_vault: trocar a senha mestra em UMA transação
+-- 6) limpeza: versão anterior deste arquivo criava rotate_vault(); a troca de senha agora só re-embrulha a DEK
 -- ------------------------------------------------------------
--- Recebe a configuração nova e TODOS os registros já re-cifrados. Se qualquer parte falhar
--- (ou se faltar algum registro), a transação inteira é desfeita: nada fica pela metade.
--- Roda com os direitos de quem chama (security invoker), então a RLS continua valendo.
-create or replace function public.rotate_vault(p_config jsonb, p_items jsonb, p_projects jsonb)
-returns void
-language plpgsql
-security invoker
-set search_path = ''
-as $$
-declare
-  n int;
-  expected int;
-  have int;
-begin
-  if auth.uid() is null then raise exception 'not_authenticated'; end if;
-  if p_config is null then raise exception 'config_required'; end if;
-
-  update public.vault_config set
-    salt           = p_config ->> 'salt',
-    kdf_iterations = (p_config ->> 'kdf_iterations')::int,
-    verifier       = p_config ->> 'verifier',
-    verifier_iv    = p_config ->> 'verifier_iv',
-    auth_version   = coalesce((p_config ->> 'auth_version')::smallint, auth_version)
-  where user_id = auth.uid();
-  get diagnostics n = row_count;
-  if n <> 1 then raise exception 'config_not_updated'; end if;
-
-  expected := coalesce(jsonb_array_length(p_items), 0);
-  select count(*) into have from public.vault_items where user_id = auth.uid();
-  if have <> expected then raise exception 'items_incomplete'; end if;
-  update public.vault_items v set
-    encrypted_data = x.encrypted_data, iv = x.iv, version = x.version
-  from jsonb_to_recordset(coalesce(p_items, '[]'::jsonb)) as x(id uuid, encrypted_data text, iv text, version smallint)
-  where v.id = x.id and v.user_id = auth.uid();
-  get diagnostics n = row_count;
-  if n <> expected then raise exception 'items_mismatch'; end if;
-
-  expected := coalesce(jsonb_array_length(p_projects), 0);
-  select count(*) into have from public.vault_projects where user_id = auth.uid();
-  if have <> expected then raise exception 'projects_incomplete'; end if;
-  update public.vault_projects v set
-    encrypted_data = x.encrypted_data, iv = x.iv, version = x.version
-  from jsonb_to_recordset(coalesce(p_projects, '[]'::jsonb)) as x(id uuid, encrypted_data text, iv text, version smallint)
-  where v.id = x.id and v.user_id = auth.uid();
-  get diagnostics n = row_count;
-  if n <> expected then raise exception 'projects_mismatch'; end if;
-end;
-$$;
-
-revoke execute on function public.rotate_vault(jsonb, jsonb, jsonb) from public, anon;
-grant  execute on function public.rotate_vault(jsonb, jsonb, jsonb) to authenticated;
+drop function if exists public.rotate_vault(jsonb, jsonb, jsonb);
 
 -- ------------------------------------------------------------
 -- 7) Storage: bucket privado para os arquivos cifrados dos projetos

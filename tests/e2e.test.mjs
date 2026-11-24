@@ -33,6 +33,20 @@ const db = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("__fake
 const setDb = (page, fn) => page.evaluate((src) => { const d = JSON.parse(localStorage.getItem("__fakedb")); new Function("d", src)(d); localStorage.setItem("__fakedb", JSON.stringify(d)); }, fn.toString().replace(/^[^{]*\{|\}$/g, ""));
 const toast = (page) => page.locator("#toast").innerText().catch(() => "");
 
+let lastRecovery = "";
+let modalChecked = false;
+// A tela de cadastro mostra a chave de recuperação e só segue depois de a pessoa confirmar que guardou.
+async function confirmRecovery(page) {
+  await page.locator("#recovery-code-modal").waitFor({ state: "visible" });
+  const code = (await page.locator("#recovery-code-display").innerText()).trim();
+  if (!modalChecked) {
+    modalChecked = true;
+    ok(await page.locator("#recovery-code-continue").isDisabled(), "cadastro: o botão Continuar só libera depois de confirmar que a chave de recuperação foi guardada");
+  }
+  await page.check("#recovery-code-confirm");
+  await page.click("#recovery-code-continue");
+  return code;
+}
 async function signup(page, email = EMAIL, pw = MASTER) {
   await page.goto(server.url + "/index.html");
   await page.click("#tab-signup");
@@ -40,6 +54,7 @@ async function signup(page, email = EMAIL, pw = MASTER) {
   await page.fill("#signup-password", pw);
   await page.fill("#signup-password-confirm", pw);
   await page.click("#signup-submit");
+  lastRecovery = await confirmRecovery(page);
   await page.waitForURL("**/vault.html");
 }
 async function login(page, email = EMAIL, pw = MASTER) {
@@ -67,22 +82,27 @@ const fld = (scope, label) => scope.locator(".field", { has: scope.page().locato
 const cards = (page) => page.locator(".cred-card__title").allInnerTexts();
 const menu = async (page, id) => { await page.click("#account-menu-trigger"); await page.click("#" + id); };
 
-/** Monta uma conta ANTIGA (v1): senha do Supabase = senha mestra; itens sem AAD. */
+/** Monta uma conta ANTIGA no formato real do banco do dono: DEK embrulhada pela senha mestra e pela chave de recuperação,
+ *  senha do Supabase = senha mestra, itens sem AAD (versão 1). */
 async function legacyAccount({ schema, items, iterations = 150000 }) {
   const userId = crypto.randomUUID();
   const salt = C.generateSaltBase64();
-  const key = await C.deriveKey(MASTER, salt, iterations);
-  const v = await C.createVerifier(key);
+  const kek = await C.deriveKey(MASTER, salt, iterations);
+  const dekBuf = C.generateDEK();
+  const dek = await C.importRawAesKey(dekBuf, false);
+  const own = await C.wrapBytes(kek, dekBuf);
+  const recoveryCode = C.generateRecoveryCode();
+  const rec = await C.wrapBytes(await C.importRawAesKey(C.recoveryCodeToKeyBytes(recoveryCode), false), dekBuf);
   const rows = [];
   for (const it of items) {
-    const enc = await C.encryptJSON(key, it); // v1: sem AAD
+    const enc = await C.encryptJSON(dek, it); // v1: sem AAD
     const row = { id: crypto.randomUUID(), user_id: userId, encrypted_data: enc.ciphertext, iv: enc.iv, created_at: new Date().toISOString() };
     if (schema.itemVersion) { row.version = 1; row.updated_at = row.created_at; }
     rows.push(row);
   }
-  const cfg = { user_id: userId, salt, kdf_iterations: iterations, verifier: v.verifier, verifier_iv: v.verifier_iv, created_at: new Date().toISOString() };
+  const cfg = { user_id: userId, salt, kdf_iterations: iterations, wrapped_dek: own.wrapped, wrapped_dek_iv: own.iv, recovery_wrapped_dek: rec.wrapped, recovery_wrapped_dek_iv: rec.iv, created_at: new Date().toISOString() };
   if (schema.authVersion) cfg.auth_version = 1;
-  return { users: [{ id: userId, email: EMAIL, password: MASTER }], tables: { vault_config: [cfg], vault_items: rows, vault_projects: [] }, schema, flags: {}, passwordsSeen: [] };
+  return { users: [{ id: userId, email: EMAIL, password: MASTER }], tables: { vault_config: [cfg], vault_items: rows, vault_projects: [] }, schema, flags: {}, passwordsSeen: [], recoveryCode };
 }
 
 try {
@@ -98,6 +118,8 @@ try {
     ok(!d.passwordsSeen.includes(MASTER) && d.users[0].password !== MASTER && d.users[0].password.length === 44, "cadastro: o servidor recebeu um segredo derivado, NUNCA a senha mestra");
     ok(!(await page.locator("#lock-overlay").isVisible()), "depois do cadastro o cofre abre direto (a chave passa à próxima página, sem pedir a senha duas vezes)");
     ok(d.tables.vault_config[0].auth_version === 2, "o cofre novo já nasce no login v2");
+    const cfg0 = d.tables.vault_config[0];
+    ok(/^([0-9A-F]{4}-){15}[0-9A-F]{4}$/.test(lastRecovery) && cfg0.wrapped_dek && cfg0.recovery_wrapped_dek && !JSON.stringify(d).includes(lastRecovery), "cadastro: a chave de recuperação é mostrada uma vez; o servidor guarda só a chave do cofre embrulhada, nunca a chave em texto");
 
     await addCredential(page, { title: "Gmail pessoal", username: "kauan@exemplo.com", password: "Sup3r-Segredo-Gmail!", url: "https://mail.google.com" });
     ok((await cards(page)).includes("Gmail pessoal"), "a credencial aparece na lista");
@@ -262,15 +284,17 @@ try {
     // trocar a senha mestra: atômico, re-cifra registros e projetos, NÃO re-cifra arquivos
     const fileBefore = await page.evaluate(async () => { const b = [...window.__fakeStorage.values()][0]; return [...new Uint8Array(await b.arrayBuffer())].join(","); });
     const secretBefore = (await db(page)).users[0].password;
+    const rowsBefore = JSON.stringify(await page.evaluate(() => { const d = JSON.parse(localStorage.getItem("__fakedb")); return [d.tables.vault_items, d.tables.vault_projects]; }));
     await menu(page, "btn-change-master");
     await page.fill("#current-master-password", MASTER);
     await page.fill("#new-master-password", "Nova-Senha-Mestra-Bem-Longa-5");
     await page.fill("#new-master-password-confirm", "Nova-Senha-Mestra-Bem-Longa-5");
     await page.setViewportSize({ width: 1100, height: 800 });
     await page.click("#btn-save-change-master");
-    ok(await until(async () => /Senha mestra alterada/.test(await toast(page)), 20000), "trocar a senha mestra funciona (credenciais e projetos)");
+    ok(await until(async () => /Senha mestra alterada/.test(await toast(page)), 20000), "trocar a senha mestra funciona");
     const dn = await db(page);
     ok(dn.users[0].password !== secretBefore && !dn.passwordsSeen.includes("Nova-Senha-Mestra-Bem-Longa-5"), "e o servidor recebe só o novo segredo derivado, nunca a nova senha");
+    ok(JSON.stringify([dn.tables.vault_items, dn.tables.vault_projects]) === rowsBefore, "trocar a senha mestra NÃO re-cifra nada: credenciais e projetos ficam byte a byte iguais (só a DEK é re-embrulhada)");
     const fileAfter = await page.evaluate(async () => { const b = [...window.__fakeStorage.values()][0]; return [...new Uint8Array(await b.arrayBuffer())].join(","); });
     ok(fileBefore === fileAfter, "os arquivos do Storage não foram tocados (a chave de cada arquivo está dentro do projeto)");
     await page.reload();
@@ -288,7 +312,7 @@ try {
     await page.click("#project-close");
 
     // troca de senha que falha no meio: nada muda
-    await setDb(page, () => { d.flags.failRotate = true; });
+    await setDb(page, () => { d.flags.failUpdate = "vault_config"; });
     const cfgBefore = JSON.stringify((await db(page)).tables.vault_config);
     const pwdBefore = (await db(page)).users[0].password;
     await menu(page, "btn-change-master");
@@ -388,11 +412,84 @@ try {
     await page.fill("#signup-password", "abcde");
     await page.fill("#signup-password-confirm", "abcde");
     await page.click("#signup-submit");
+    await confirmRecovery(page);
     await page.waitForURL("**/vault.html");
     await addCredential(page, { title: "Com senha curta", password: "x" });
     await page.reload();
     await unlock(page, "abcde");
     ok(await until(async () => (await cards(page)).includes("Com senha curta")), "com 5 caracteres o cofre é criado, bloqueia e desbloqueia normalmente");
+    await ctx.close();
+  }
+
+  // ================= 5c) esqueci a senha mestra: e-mail + chave de recuperação
+  {
+    const { ctx, page } = await open();
+    await signup(page);
+    const code = lastRecovery;
+    await addCredential(page, { title: "Cartao do banco", username: "u", password: "Seg-Recuperavel-1" });
+    const dbefore = await db(page);
+    const rowsBefore = JSON.stringify(dbefore.tables.vault_items);
+    const userId = dbefore.users[0].id;
+    await menu(page, "btn-logout");
+    await page.waitForURL("**/index.html");
+    await page.fill("#login-email", EMAIL);
+    await page.click("#btn-forgot-password");
+    ok(await until(async () => (await page.locator("#forgot-password-message").innerText()).includes("link de recuperação")), "esqueci a senha: o app avisa que mandou o e-mail (sem revelar se o cofre existe)");
+    const resets = (await db(page)).resets || [];
+    ok(resets.length === 1 && resets[0].redirectTo === server.url + "/recovery.html", "o link do e-mail volta para a tela de recuperação do próprio site");
+
+    // o clique no link do e-mail deixa uma sessão de recuperação aberta (simulada)
+    await page.evaluate((s) => sessionStorage.setItem("__fakesession", JSON.stringify(s)), { access_token: "tok-" + userId, user: { id: userId, email: EMAIL } });
+    await page.goto(server.url + "/recovery.html");
+    await page.fill("#recovery-code-input", "0000-0000-0000");
+    await page.fill("#recovery-new-password", "Senha-Nova-Recuperada-5");
+    await page.fill("#recovery-new-password-confirm", "Senha-Nova-Recuperada-5");
+    await page.click("#recovery-submit");
+    ok(await until(async () => (await page.locator("#recovery-error").innerText()).includes("formato inválido")), "recuperar: chave com formato errado é recusada");
+    await page.fill("#recovery-code-input", "0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000-0000");
+    await page.click("#recovery-submit");
+    ok(await until(async () => (await page.locator("#recovery-error").innerText()).includes("incorreta")), "recuperar: chave errada (formato certo) é recusada");
+    await page.fill("#recovery-code-input", code.toLowerCase());
+    await page.click("#recovery-submit");
+    await page.waitForURL("**/vault.html");
+    ok(await until(async () => (await cards(page)).includes("Cartao do banco")), "recuperar com a chave certa: as credenciais antigas abrem, sem perder nada");
+    const dr = await db(page);
+    ok(JSON.stringify(dr.tables.vault_items) === rowsBefore && !dr.passwordsSeen.includes("Senha-Nova-Recuperada-5") && dr.users[0].password.length === 44, "e nada foi re-cifrado; o servidor só recebeu o segredo derivado da nova senha");
+    await page.reload();
+    await unlock(page, "Senha-Nova-Recuperada-5");
+    ok(await until(async () => (await cards(page)).includes("Cartao do banco")), "a nova senha mestra passa a abrir o cofre");
+    await menu(page, "btn-logout");
+    await page.waitForURL("**/index.html");
+    await page.fill("#login-email", EMAIL);
+    await page.fill("#login-password", MASTER);
+    await page.click("#login-submit");
+    ok(await until(async () => (await page.locator("#login-error").innerText()).length > 0), "a senha mestra antiga deixa de entrar");
+    await ctx.close();
+  }
+
+  // ================= 5d) conta ANTIGA real (DEK): a chave de recuperação que já existe continua valendo
+  {
+    const seed = await legacyAccount({ schema: { itemVersion: true, authVersion: true, projects: true }, items: [{ title: "Do formato real", username: "u", password: "p-real-1", url: "", notes: "" }] });
+    const { ctx, page } = await open({ seed });
+    await login(page);
+    ok(await until(async () => (await cards(page)).includes("Do formato real")), "conta real (DEK): abre com a senha mestra de sempre");
+    await menu(page, "btn-change-master");
+    await page.fill("#current-master-password", MASTER);
+    await page.fill("#new-master-password", "Senha-Trocada-Pos-Migracao-3");
+    await page.fill("#new-master-password-confirm", "Senha-Trocada-Pos-Migracao-3");
+    await page.click("#btn-save-change-master");
+    ok(await until(async () => /Senha mestra alterada/.test(await toast(page)), 20000), "conta real: trocar a senha mestra funciona");
+    const userId = (await db(page)).users[0].id;
+    await menu(page, "btn-logout");
+    await page.waitForURL("**/index.html");
+    await page.evaluate((s) => sessionStorage.setItem("__fakesession", JSON.stringify(s)), { access_token: "tok-" + userId, user: { id: userId, email: EMAIL } });
+    await page.goto(server.url + "/recovery.html");
+    await page.fill("#recovery-code-input", seed.recoveryCode);
+    await page.fill("#recovery-new-password", "Outra-Depois-Da-Troca-8");
+    await page.fill("#recovery-new-password-confirm", "Outra-Depois-Da-Troca-8");
+    await page.click("#recovery-submit");
+    await page.waitForURL("**/vault.html");
+    ok(await until(async () => (await cards(page)).includes("Do formato real")), "a chave de recuperação ORIGINAL continua valendo depois de trocar a senha mestra");
     await ctx.close();
   }
 

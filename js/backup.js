@@ -2,9 +2,10 @@
    BACKUP MODULE
    ==========================================================
    O backup baixa exatamente o que está no Supabase: os blobs já
-   cifrados (credenciais e projetos), mais o sal/verificador. Nada
-   é decifrado para gerar o arquivo: ele continua seguro se cair em
-   outras mãos, mas só abre com a senha mestra que o gerou.
+   cifrados (credenciais e projetos), mais o sal e a chave do cofre
+   embrulhada (DEK). Nada é decifrado para gerar o arquivo: ele continua
+   seguro se cair em outras mãos, mas só abre com a senha mestra (ou a
+   chave de recuperação) do cofre que o gerou.
 
    Formato 2 ("cofre-backup", version 2): guarda também os ids, a
    versão de cada registro e o dono (user_id). Restaurar é idempotente
@@ -18,7 +19,7 @@ async function createBackup() {
     await detectSchema();
     const { data: configRow, error: configError } = await sb
       .from("vault_config")
-      .select(VaultSchema.authVersion ? "salt, kdf_iterations, verifier, verifier_iv, auth_version" : "salt, kdf_iterations, verifier, verifier_iv")
+      .select("salt, kdf_iterations, wrapped_dek, wrapped_dek_iv, recovery_wrapped_dek, recovery_wrapped_dek_iv")
       .eq("user_id", VaultSession.userId)
       .maybeSingle();
     if (configError) throw configError;
@@ -93,16 +94,28 @@ async function restoreBackup(file) {
       return;
     }
 
-    // Qual chave abre o backup? A atual, se o sal for o mesmo; senão a senha mestra de quando foi feito.
+    // Qual chave abre o backup? A DEK atual, se for a mesma do cofre que o gerou; senão a DEK do backup,
+    // desembrulhada com a senha mestra que valia quando ele foi feito.
     let backupKey = VaultSession.key;
-    const cfg = backup.vault_config;
-    if (cfg && VaultSession.config && cfg.salt !== VaultSession.config.salt) {
-      const password = await askPasswordValue();
-      if (!password) return;
-      backupKey = await CryptoUtil.deriveKey(password, cfg.salt, cfg.kdf_iterations);
-      if (!(await CryptoUtil.checkVerifier(backupKey, cfg.verifier, cfg.verifier_iv))) {
-        toast("A senha mestra informada não abre este backup.");
-        return;
+    const sample = backup.items[0] || (backup.projects || [])[0];
+    if (sample) {
+      const kind = backup.items[0] ? "item" : "project";
+      const aad = CryptoUtil.aadFor(sample.version || 1, backup.user_id, kind, sample.id);
+      const opens = await CryptoUtil.decryptJSON(VaultSession.key, sample.encrypted_data, sample.iv, aad).then(() => true, () => false);
+      if (!opens) {
+        const cfg = backup.vault_config;
+        if (!cfg || !cfg.wrapped_dek) {
+          toast("Este backup é de outro cofre e não traz a chave dele.");
+          return;
+        }
+        const password = await askPasswordValue("Este backup é de outro cofre. Digite a senha mestra que valia quando ele foi feito.");
+        if (!password) return;
+        const dekBuf = await AuthModule.unwrapDek(password, cfg);
+        if (!dekBuf) {
+          toast("A senha mestra informada não abre este backup.");
+          return;
+        }
+        backupKey = await CryptoUtil.importRawAesKey(dekBuf, false);
       }
     }
 

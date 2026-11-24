@@ -1,93 +1,58 @@
 /* ==========================================================
    SETTINGS MODULE: alterar senha mestra / reforçar criptografia
    ==========================================================
+   O cofre usa uma chave aleatória (DEK) que cifra tudo; a senha mestra
+   só "embrulha" essa DEK. Por isso trocar a senha mestra NÃO re-cifra
+   credenciais, projetos nem arquivos: a mesma DEK é embrulhada de novo
+   com uma KEK nova (uma única linha de vault_config muda).
+
    Passo a passo:
-   1) Confere a senha atual decifrando o verificador.
-   2) Gera sal novo, deriva a chave nova e prepara TODOS os registros
-      (credenciais e projetos) re-cifrados em memória.
+   1) Desembrulha a DEK com a senha atual (se falhar, a senha está errada).
+   2) Gera sal novo, deriva a KEK nova e embrulha a MESMA DEK.
    3) Atualiza o segredo de login no Supabase Auth.
-   4) Grava tudo de uma vez numa única transação do banco
-      (função rotate_vault): ou muda tudo, ou não muda nada.
-      Se este passo falhar, o segredo de login volta ao anterior.
+   4) Grava o novo sal e a DEK embrulhada em vault_config. Se este passo
+      falhar, o segredo de login volta ao anterior.
 
-   Arquivos de projeto NÃO são re-cifrados: cada arquivo tem a própria
-   chave, guardada dentro do registro do projeto (que é re-cifrado).
-
-   Sem a função rotate_vault no banco (schema.sql ainda não rodado), cai
-   no método antigo, que NÃO é atômico: por isso o app pede um backup
-   antes e avisa para não fechar a janela.
+   A chave de recuperação continua valendo depois da troca (ela embrulha
+   a mesma DEK, que não muda).
    ========================================================== */
 
-async function reencryptTable(table, kind, oldKey, newKey, targetVersion) {
-  const cols = VaultSchema.itemVersion || table !== "vault_items" ? "id, encrypted_data, iv, version" : "id, encrypted_data, iv";
-  const { data: rows, error } = await sb.from(table).select(cols).eq("user_id", VaultSession.userId);
-  if (error) throw error;
-
-  const out = [];
-  for (const row of rows) {
-    const oldVersion = row.version || 1;
-    const plain = await CryptoUtil.decryptJSON(oldKey, row.encrypted_data, row.iv, CryptoUtil.aadFor(oldVersion, VaultSession.userId, kind, row.id));
-    const { ciphertext, iv } = await CryptoUtil.encryptJSON(newKey, plain, CryptoUtil.aadFor(targetVersion, VaultSession.userId, kind, row.id));
-    out.push({ id: row.id, encrypted_data: ciphertext, iv, version: targetVersion });
-  }
-  return out;
-}
-
 async function rotateMasterKey(currentPassword, newPassword) {
-  await detectSchema();
   const config = await AuthModule.fetchVaultConfig(VaultSession.userId);
   if (!config) throw new Error("Configuração do cofre não encontrada.");
 
-  const oldKey = await AuthModule.unlockWithConfig(currentPassword, config);
-  if (!oldKey) return { wrongPassword: true };
+  const dekBuf = await AuthModule.unwrapDek(currentPassword, config);
+  if (!dekBuf) return { wrongPassword: true };
 
   const newSalt = CryptoUtil.generateSaltBase64();
   const iterations = window.APP_CONFIG.KDF_ITERATIONS || CryptoUtil.DEFAULT_KDF_ITERATIONS;
-  const newKey = await CryptoUtil.deriveKey(newPassword, newSalt, iterations);
-  const { verifier, verifier_iv } = await CryptoUtil.createVerifier(newKey);
+  const newKek = await CryptoUtil.deriveKey(newPassword, newSalt, iterations);
+  const { wrapped, iv } = await CryptoUtil.wrapBytes(newKek, dekBuf);
+  const newConfig = { salt: newSalt, kdf_iterations: iterations, wrapped_dek: wrapped, wrapped_dek_iv: iv };
 
-  const itemVersion = VaultSchema.itemVersion ? 2 : 1;
-  const items = await reencryptTable("vault_items", "item", oldKey, newKey, itemVersion);
-  const projects = VaultSchema.projects ? await reencryptTable("vault_projects", "project", oldKey, newKey, 2) : [];
-
-  const newConfig = { salt: newSalt, kdf_iterations: iterations, verifier, verifier_iv };
-  if (VaultSchema.authVersion) newConfig.auth_version = 2;
-
-  // 3) segredo de login (só muda se a senha mestra mudou)
+  // segredo de login (só muda se a senha mestra mudou ou se a conta ainda era do formato antigo)
   const email = VaultSession.email;
+  const legacyAuth = !(config.auth_version >= 2);
   const passwordChanged = newPassword !== currentPassword;
+  const touchAuth = passwordChanged || legacyAuth;
   const newSecret = await CryptoUtil.deriveAuthSecret(newPassword, email);
-  const oldSecret = config.auth_version >= 2 ? await CryptoUtil.deriveAuthSecret(currentPassword, email) : currentPassword;
-  if (passwordChanged || config.auth_version < 2) {
+  const oldSecret = legacyAuth ? currentPassword : await CryptoUtil.deriveAuthSecret(currentPassword, email);
+  if (touchAuth) {
     const { error: authError } = await sb.auth.updateUser({ password: newSecret });
     if (authError) throw authError;
+    if (VaultSchema.authVersion) newConfig.auth_version = 2;
   }
 
   try {
-    if (VaultSchema.rotateRpc) {
-      const { error } = await sb.rpc("rotate_vault", { p_config: newConfig, p_items: items, p_projects: projects });
-      if (error) throw error;
-    } else {
-      // método antigo (não atômico): primeiro os itens, depois a configuração
-      for (const row of items) {
-        const patch = { encrypted_data: row.encrypted_data, iv: row.iv };
-        if (VaultSchema.itemVersion) patch.version = row.version;
-        const { error } = await sb.from("vault_items").update(patch).eq("id", row.id).eq("user_id", VaultSession.userId);
-        if (error) throw error;
-      }
-      const { error } = await sb.from("vault_config").update(newConfig).eq("user_id", VaultSession.userId);
-      if (error) throw error;
-    }
+    const { error } = await sb.from("vault_config").update(newConfig).eq("user_id", VaultSession.userId);
+    if (error) throw error;
   } catch (err) {
-    if (passwordChanged || config.auth_version < 2) {
-      await sb.auth.updateUser({ password: oldSecret }).catch(() => {}); // desfaz o segredo de login
-    }
+    if (touchAuth) await sb.auth.updateUser({ password: oldSecret }).catch(() => {}); // desfaz o segredo de login
     throw err;
   }
 
-  VaultSession.key = newKey;
   VaultSession.config = { ...config, ...newConfig };
-  return { ok: true, count: items.length + projects.length };
+  return { ok: true };
 }
 
 async function handleChangeMasterPassword(currentPassword, newPassword, newPasswordConfirm) {
@@ -107,13 +72,10 @@ async function handleChangeMasterPassword(currentPassword, newPassword, newPassw
   saveBtn.disabled = true;
   try {
     await detectSchema();
-    if (!VaultSchema.rotateRpc && !window.confirm("O banco ainda não tem a troca atômica de senha. Se a conexão cair no meio, parte dos registros pode ficar ilegível. Baixe um backup antes. Continuar mesmo assim?")) return;
     const r = await rotateMasterKey(currentPassword, newPassword);
     if (r.wrongPassword) return fail("Senha mestra atual incorreta.");
     closeChangeMasterModal();
-    document.dispatchEvent(new CustomEvent("vault:rekeyed"));
-    if (typeof refreshList === "function") await refreshList();
-    toast(`Senha mestra alterada. ${r.count} registro(s) re-criptografado(s).`);
+    toast("Senha mestra alterada. A chave de recuperação continua valendo.");
   } catch (err) {
     console.error(err);
     fail("Erro ao alterar a senha mestra. Nada foi alterado. Tente novamente.");
@@ -128,12 +90,12 @@ async function handleUpgradeKdf() {
     toast("Sua criptografia já está no nível atual.");
     return;
   }
-  if (!window.confirm("Vamos baixar um backup (cifrado) e depois reforçar a criptografia do cofre com a mesma senha mestra. Continuar?")) return;
+  if (!window.confirm("Vamos reforçar a criptografia do cofre com a mesma senha mestra. Suas credenciais não são alteradas. Continuar?")) return;
   // a senha é pedida uma vez, usada só para derivar a chave nova e não é guardada em lugar nenhum
   const password = await askPasswordValue();
   if (!password) return;
   try {
-    await createBackup();
+    await detectSchema();
     const r = await rotateMasterKey(password, password);
     if (r.wrongPassword) return toast("Senha mestra incorreta.");
     toast("Criptografia reforçada.");
@@ -146,12 +108,12 @@ async function handleUpgradeKdf() {
 }
 
 // Pede a senha mestra por um campo do próprio app (reaproveita o diálogo de confirmação).
-function askPasswordValue() {
+function askPasswordValue(reason) {
   return new Promise((resolve) => {
     const dlg = document.getElementById("reauth-modal");
     const form = document.getElementById("reauth-form");
     const input = document.getElementById("reauth-password");
-    document.getElementById("reauth-reason").textContent = "Digite a senha mestra mais uma vez para gerar a nova chave.";
+    document.getElementById("reauth-reason").textContent = reason || "Digite a senha mestra mais uma vez para gerar a nova chave.";
     document.getElementById("reauth-error").hidden = true;
     input.value = "";
     dlg.hidden = false;

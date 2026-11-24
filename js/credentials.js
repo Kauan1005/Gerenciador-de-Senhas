@@ -185,7 +185,7 @@ function showUpgradeBanner() {
   const banner = document.getElementById("upgrade-banner");
   if (!banner) return;
   const messages = [];
-  if (!VaultSchema.projects || !VaultSchema.itemVersion || !VaultSchema.rotateRpc) {
+  if (!VaultSchema.projects || !VaultSchema.itemVersion) {
     messages.push("O banco ainda não tem as atualizações de segurança e de projetos. Rode o arquivo supabase/schema.sql no Supabase (README, seção 5).");
   }
   if (AuthModule.needsKdfUpgrade(VaultSession.config)) {

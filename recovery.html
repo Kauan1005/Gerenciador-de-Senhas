@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Recuperar cofre · Arca</title>
+  <link rel="icon" type="image/svg+xml" href="img/logo.svg" />
+  <link rel="icon" type="image/png" href="img/logo.png" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/modal.css" />
+  <script src="js/theme.js"></script>
+</head>
+<body>
+  <main class="screen">
+    <header class="brand">
+      <img src="img/logo.svg" alt="" class="brand__mark" />
+      <span class="brand__name">Arca</span>
+    </header>
+
+    <section class="card" role="region" aria-label="Recuperar cofre">
+      <p class="panel__hint" id="recovery-no-session" hidden>
+        Este link de recuperação é inválido ou expirou. Volte para a tela de login e
+        clique em "Esqueci minha senha mestra" para receber um novo link.
+      </p>
+
+      <form class="panel is-active" id="recovery-form">
+        <p class="panel__hint">
+          Digite a chave de recuperação que você guardou ao criar o cofre e escolha uma nova
+          senha mestra. Suas credenciais salvas não serão perdidas.
+        </p>
+
+        <label class="field">
+          <span class="field__label">Chave de recuperação</span>
+          <input type="text" id="recovery-code-input" required placeholder="XXXX-XXXX-XXXX-..." autocomplete="off" spellcheck="false" />
+        </label>
+
+        <label class="field">
+          <span class="field__label">Nova senha mestra</span>
+          <input type="password" id="recovery-new-password" autocomplete="new-password" required minlength="5" />
+        </label>
+
+        <label class="field">
+          <span class="field__label">Confirmar nova senha mestra</span>
+          <input type="password" id="recovery-new-password-confirm" autocomplete="new-password" required minlength="5" />
+        </label>
+
+        <p class="form-error" id="recovery-error" role="alert" hidden></p>
+
+        <button type="submit" class="btn btn--primary" id="recovery-submit">Recuperar cofre</button>
+        <a class="btn btn--ghost btn--small" href="index.html">Voltar ao login</a>
+      </form>
+    </section>
+
+    <p class="footnote">Criptografia AES-256 local &middot; nada é enviado sem antes ser cifrado</p>
+  </main>
+
+  <script src="vendor/supabase-js-2.119.0.umd.js" integrity="sha384-uteMfOloLDGt042uDz+xHGF3ym63/WQ6rFq7murQRG8Ih7QrXGEGNtWd8688sb4O" defer></script>
+  <script src="js/config.js" defer></script>
+  <script src="js/supabase-client.js" defer></script>
+  <script src="js/crypto.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/session.js" defer></script>
+  <script src="js/recovery.js" defer></script>
+</body>
+</html>

@@ -104,6 +104,9 @@ try {
   await page.fill("#signup-password", MASTER);
   await page.fill("#signup-password-confirm", MASTER);
   await page.click("#signup-submit");
+  await page.locator("#recovery-code-modal").waitFor({ state: "visible" });
+  await page.check("#recovery-code-confirm");
+  await page.click("#recovery-code-continue");
   await page.waitForURL("**/vault.html");
   await page.locator('a[data-nav][href="projects.html"]').click();
   await page.waitForURL("**/projects.html");

@@ -66,7 +66,7 @@ js/
   backup.js  settings.js     backup/restauração e troca de senha mestra (atômica)
   autolock.js  clipboard.js  generator.js  theme.js  ui-tabs.js
 vendor/                      bibliotecas locais (supabase-js 2.119.0, SheetJS 0.20.3) + SRI.txt
-supabase/schema.sql          banco: tabelas, RLS, rotate_vault(), bucket de arquivos
+supabase/schema.sql          banco: tabelas, RLS, bucket de arquivos
 scripts/build.mjs            monta dist/ (só o que vai para o ar)
 _headers  netlify.toml       cabeçalhos de segurança (CSP...) e build do Netlify
 tests/                       testes (criptografia e ponta a ponta)
@@ -198,3 +198,15 @@ Como funciona e o que isso garante:
 **Limites e o que NÃO foi verificado:** os testes usam um Google **simulado** (`tests/drive.e2e.test.mjs`); o fluxo real depende do seu Client ID
 e das telas do Google, e não pôde ser exercitado aqui. Se ao conectar o Google mostrar `redirect_uri_mismatch`, confira o passo 4. O fluxo usado
 (OAuth "implícito" em janela própria) é suportado pelo Google para apps web hoje; se um dia for descontinuado, só `js/google-drive.js` precisa trocar.
+
+## 12. Chave de recuperação e "esqueci a senha mestra"
+
+O cofre usa uma chave aleatória (DEK) que cifra tudo. Ela fica guardada **embrulhada** de duas formas: pela sua senha mestra e por uma
+**chave de recuperação** de 256 bits, mostrada **uma única vez** no cadastro (anote ou guarde num lugar seguro; não fica salva no servidor em texto).
+
+- **Esqueci a senha mestra:** na tela de login, clique em *Esqueci minha senha mestra*. O Supabase manda um link para o seu e-mail, que abre
+  `recovery.html`; ali você informa a chave de recuperação e escolhe uma nova senha mestra. Nada é re-cifrado e nada se perde.
+- **Trocar a senha mestra** (menu da conta) também só re-embrulha a DEK e é instantâneo. A chave de recuperação continua valendo.
+- Sem a senha mestra **e** sem a chave de recuperação, os dados não podem ser lidos por ninguém.
+- No Supabase, em *Authentication > URL Configuration*, o **Site URL** deve ser o endereço do site e `https://SEU-SITE/recovery.html` precisa estar
+  em *Redirect URLs*, senão o link do e-mail não volta para a tela de recuperação.

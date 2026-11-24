@@ -203,7 +203,7 @@ function reauth(reason) {
 /* ---------- compatibilidade com o banco ---------- */
 
 // Descobre uma vez o que o banco já tem. Erros "coluna/tabela não existe" viram false.
-const VaultSchema = { checked: false, itemVersion: false, projects: false, rotateRpc: false, authVersion: false };
+const VaultSchema = { checked: false, itemVersion: false, projects: false, authVersion: false };
 
 async function detectSchema() {
   if (VaultSchema.checked) return VaultSchema;
@@ -212,9 +212,6 @@ async function detectSchema() {
   VaultSchema.itemVersion = await probe(sb.from("vault_items").select("version").limit(1));
   VaultSchema.authVersion = await probe(sb.from("vault_config").select("auth_version").limit(1));
   VaultSchema.projects = await probe(sb.from("vault_projects").select("id").limit(1));
-  // existência da função: chamada sem argumentos válidos falha com erro diferente de "não existe"
-  const rpc = await sb.rpc("rotate_vault", { p_config: null, p_items: [], p_projects: [] });
-  VaultSchema.rotateRpc = !missing(rpc.error);
   VaultSchema.checked = true;
   return VaultSchema;
 }

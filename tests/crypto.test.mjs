@@ -15,9 +15,22 @@ const salt = C.generateSaltBase64();
 const key = await C.deriveKey("Senha-Mestra-De-Teste-1", salt, IT);
 const key2 = await C.deriveKey("Senha-Mestra-De-Teste-1", salt, IT);
 const wrong = await C.deriveKey("outra-senha-qualquer-12", salt, IT);
-const v = await C.createVerifier(key);
-ok(await C.checkVerifier(key2, v.verifier, v.verifier_iv), "a mesma senha e o mesmo sal derivam a mesma chave (verificador abre)");
-ok(!(await C.checkVerifier(wrong, v.verifier, v.verifier_iv)), "senha errada não abre o verificador");
+// DEK: chave aleatória embrulhada pela KEK da senha mestra e pela chave de recuperação
+const dekBuf = C.generateDEK();
+const wrapped = await C.wrapBytes(key, dekBuf);
+const un = await C.unwrapBytes(key2, wrapped.wrapped, wrapped.iv);
+ok(un && Buffer.from(un).equals(Buffer.from(dekBuf)), "a mesma senha e o mesmo sal derivam a mesma KEK (a DEK desembrulha igual)");
+ok((await C.unwrapBytes(wrong, wrapped.wrapped, wrapped.iv)) === null, "senha errada não desembrulha a DEK (devolve null, sem erro)");
+const rc = C.generateRecoveryCode();
+ok(/^([0-9A-F]{4}-){15}[0-9A-F]{4}$/.test(rc) && rc !== C.generateRecoveryCode(), "a chave de recuperação tem 256 bits em grupos de 4 e é aleatória");
+const rcBytes = C.recoveryCodeToKeyBytes(rc.toLowerCase().replaceAll("-", " "));
+ok(rcBytes && rcBytes.byteLength === 32 && C.recoveryCodeToKeyBytes("1234-5678") === null && C.recoveryCodeToKeyBytes("") === null, "a chave digitada (minúscula, com espaços) volta aos 32 bytes; formato errado vira null");
+const recKek = await C.importRawAesKey(rcBytes, false);
+const recWrapped = await C.wrapBytes(recKek, dekBuf);
+const viaRec = await C.unwrapBytes(await C.importRawAesKey(C.recoveryCodeToKeyBytes(rc), false), recWrapped.wrapped, recWrapped.iv);
+ok(viaRec && Buffer.from(viaRec).equals(Buffer.from(dekBuf)), "a chave de recuperação desembrulha a MESMA DEK");
+const dekKey = await C.importRawAesKey(dekBuf, false);
+ok(dekKey.extractable === false, "a DEK de uso não é exportável");
 let threw = false;
 try { await C.deriveKey("x", salt, 1000); } catch { threw = true; }
 ok(threw, "iterações abaixo do piso (servidor malicioso) são recusadas");

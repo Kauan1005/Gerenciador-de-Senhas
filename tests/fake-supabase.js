@@ -1,5 +1,5 @@
 /* Supabase SIMULADO para os testes (roda dentro do navegador de teste).
- * Imita o que o app usa: auth (e-mail/senha), tabelas com RLS por usuário, rpc rotate_vault e storage.
+ * Imita o que o app usa: auth (e-mail/senha), tabelas com RLS por usuário, reset de senha e storage.
  * O "servidor" guarda tudo em localStorage (sobrevive a trocas de página) e REGISTRA toda senha que recebe
  * (db.passwordsSeen): é assim que os testes provam que a senha mestra não chega ao servidor.
  * Nunca fala com a rede e nunca toca no seu banco de verdade. */
@@ -35,7 +35,7 @@
   }
 
   const COLS = (schema) => ({
-    vault_config: ["user_id", "salt", "kdf_iterations", "verifier", "verifier_iv", "created_at", ...(schema.authVersion ? ["auth_version"] : [])],
+    vault_config: ["user_id", "salt", "kdf_iterations", "wrapped_dek", "wrapped_dek_iv", "recovery_wrapped_dek", "recovery_wrapped_dek_iv", "created_at", ...(schema.authVersion ? ["auth_version"] : [])],
     vault_items: ["id", "user_id", "encrypted_data", "iv", "created_at", ...(schema.itemVersion ? ["version", "updated_at"] : [])],
     vault_projects: ["id", "user_id", "encrypted_data", "iv", "version", "created_at", "updated_at"]
   });
@@ -164,31 +164,6 @@
     }
   }
 
-  const rotate = (args) => {
-    const db = load();
-    const me = uid();
-    if (!db.schema.rpc) return { data: null, error: { code: "PGRST202", message: "Could not find the function public.rotate_vault in the schema cache" } };
-    if (!me) return { data: null, error: { code: "P0001", message: "not_authenticated" } };
-    if (!args.p_config) return { data: null, error: { code: "P0001", message: "config_required" } };
-    if (db.flags.failRotate) return { data: null, error: { code: "P0001", message: "falha simulada na rotação" } };
-    const next = JSON.parse(JSON.stringify(db));
-    const cfg = next.tables.vault_config.find((c) => c.user_id === me);
-    if (!cfg) return { data: null, error: { code: "P0001", message: "config_not_updated" } };
-    Object.assign(cfg, { salt: args.p_config.salt, kdf_iterations: args.p_config.kdf_iterations, verifier: args.p_config.verifier, verifier_iv: args.p_config.verifier_iv });
-    if (db.schema.authVersion && args.p_config.auth_version != null) cfg.auth_version = args.p_config.auth_version;
-    for (const [table, list, label] of [["vault_items", args.p_items || [], "items"], ["vault_projects", args.p_projects || [], "projects"]]) {
-      const mine = next.tables[table].filter((r) => r.user_id === me);
-      if (mine.length !== list.length) return { data: null, error: { code: "P0001", message: label + "_incomplete" } };
-      for (const x of list) {
-        const row = mine.find((r) => r.id === x.id);
-        if (!row) return { data: null, error: { code: "P0001", message: label + "_mismatch" } };
-        row.encrypted_data = x.encrypted_data; row.iv = x.iv; row.version = x.version;
-      }
-    }
-    save(next); // tudo ou nada
-    return { data: null, error: null };
-  };
-
   function createClient(url, key, opts) {
     const store = (opts && opts.auth && opts.auth.storage) || sessionStorage;
     const mkSession = (user) => ({ access_token: "tok-" + user.id, user: { id: user.id, email: user.email } });
@@ -220,6 +195,12 @@
           const s = JSON.parse(sessionStorage.getItem(SESSION) || "null");
           return { data: { session: s }, error: null };
         },
+        async resetPasswordForEmail(email, opts) {
+          const db = load();
+          (db.resets ||= []).push({ email: String(email).toLowerCase(), redirectTo: opts && opts.redirectTo });
+          save(db);
+          return { data: {}, error: null };
+        },
         async signOut() { sessionStorage.removeItem(SESSION); return { error: null }; },
         async updateUser({ password }) {
           const db = load();
@@ -233,7 +214,7 @@
         }
       },
       from: (t) => new Query(t),
-      rpc: async (name, args) => (name === "rotate_vault" ? rotate(args || {}) : { data: null, error: { code: "PGRST202", message: "function not found" } }),
+      rpc: async () => ({ data: null, error: { code: "PGRST202", message: "function not found" } }),
       storage: {
         from: (bucket) => ({
           async upload(path, blob, o) {
