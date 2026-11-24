@@ -1,4 +1,4 @@
-# Cofre: gerenciador de senhas e de projetos
+# Arca: gerenciador de senhas e de projetos
 
 HTML/CSS/JS puro (sem bundler no site), com **Supabase** como banco e login, e deploy estático no **Netlify**.
 Tudo o que é sensível é **cifrado no navegador** antes de sair: o servidor só guarda blobs ilegíveis.
@@ -61,6 +61,7 @@ js/
   vault-data.js              acesso às credenciais cifradas
   credentials.js             tela de senhas
   projects.js  files.js      tela de projetos e arquivos cifrados
+  google-drive.js            arquivos no Google Drive de cada pessoa (+ google-callback.html/.js)
   import-export.js           CSV e Excel
   backup.js  settings.js     backup/restauração e troca de senha mestra (atômica)
   autolock.js  clipboard.js  generator.js  theme.js  ui-tabs.js
@@ -101,7 +102,7 @@ testes nunca vão para o ar (o site antigo servia o `README.md` e o `config.exam
 **Com Git (recomendado):** Netlify > Site configuration:
 - Build command: `node scripts/build.mjs`  ·  Publish directory: `dist` (já estão no `netlify.toml`)
 - Environment variables: `SUPABASE_URL` e `SUPABASE_ANON_KEY` (a chave **pública**)
-- Opcional: `LEGACY_LOGIN=false` (veja a seção 10)
+- Opcional: `GOOGLE_CLIENT_ID` (seção 11) e `LEGACY_LOGIN=false` (seção 10)
 
 O build **recusa** uma chave `service_role`/`sb_secret_` por engano e troca o host do Supabase dentro da CSP.
 
@@ -122,8 +123,11 @@ Menu **Projetos**. Cada projeto tem quatro abas:
   conta, região, notas, e **senhas do cofre ligadas** (guardadas só como ids; o conteúdo continua no cofre, com atalho para copiar).
 - **Hospedagem** (uma ou mais): provedor (Netlify, Vercel…), nome do site, endereço público, painel, domínio, como publica, conta, notas, senhas ligadas.
 - **Arquivos**: instaladores, `.zip`, `.apk`… cifrados no navegador antes de subir; versão e observações de instalação por arquivo;
-  "Baixar" decifra e confere o SHA-256 (arquivo adulterado no servidor é recusado). Limite de 50 MB por arquivo; o plano gratuito do
-  Supabase tem ~1 GB no total (o app mostra o uso).
+  "Baixar" decifra e confere o SHA-256 (arquivo adulterado no servidor é recusado). Onde ficam os arquivos:
+  - **Com `GOOGLE_CLIENT_ID` configurado (recomendado): no Google Drive de cada pessoa** (seção 11). Cada um conecta a própria conta
+    Google, usa a própria cota gratuita (~15 GB) e os arquivos são pessoais. Limite padrão de 200 MB por arquivo (`MAX_FILE_MB_DRIVE`).
+  - **Sem Google configurado:** no Storage do Supabase (limite de 50 MB por arquivo; ~1 GB no total, dividido por todos os usuários).
+  Arquivos já guardados num lugar continuam abrindo mesmo se você mudar de modo (cada arquivo lembra onde está).
 
 A lista pode ser organizada **por projeto**, **por banco de dados** ou **por hospedagem** (um grupo por provedor). A busca olha nome,
 descrição, provedores, endereços, contas e nomes de arquivo, sempre localmente.
@@ -145,7 +149,7 @@ Detalhes e riscos restantes em [`SECURITY.md`](SECURITY.md).
 ```
 cd tests
 npm install        # só desenvolvimento (playwright-core); o site não usa npm
-npm test           # criptografia (Node) + ponta a ponta (navegador)
+npm test           # criptografia (Node) + build + ponta a ponta (navegador) + Google Drive simulado
 ```
 
 Os testes ponta a ponta usam um **Supabase simulado** (`tests/fake-supabase.js`): não tocam no banco real. Servem o site com os
@@ -164,3 +168,33 @@ Netlify). Aí uma senha errada deixa de ser enviada ao servidor numa segunda ten
 
 Cofres criados com menos de 600.000 iterações mostram o aviso **"Reforçar criptografia"** no menu da conta (re-deriva a chave com o
 custo atual, com backup automático antes).
+
+## 11. Google Drive pessoal (arquivos de projeto)
+
+Para cada pessoa guardar os arquivos no **próprio** Google Drive (cota gratuita individual, projetos pessoais), crie um cliente OAuth uma vez:
+
+1. [Google Cloud Console](https://console.cloud.google.com/) > novo projeto (qualquer nome).
+2. **APIs e serviços > Biblioteca**: ative a **Google Drive API**.
+3. **Tela de permissão OAuth**: tipo *Externo*; nome do app (ex.: Arca); e-mail de suporte; em *Escopos* adicione só
+   `.../auth/drive.file`. Para o app abrir para qualquer pessoa, publique-o (*Em produção*). `drive.file` não é escopo restrito,
+   então normalmente não exige a auditoria de segurança do Google; enquanto estiver em *Teste*, só os e-mails de teste entram.
+4. **Credenciais > Criar credenciais > ID do cliente OAuth > Aplicativo da Web**.
+   - *Origens JavaScript autorizadas*: `https://SEU-SITE.netlify.app` (e `http://localhost:8080` se for testar local).
+   - *URIs de redirecionamento autorizados*: `https://SEU-SITE.netlify.app/google-callback.html`.
+5. Copie o **ID do cliente** (`123...apps.googleusercontent.com`) e defina `GOOGLE_CLIENT_ID` no Netlify (ou no `js/config.js` local).
+   **Nunca** use o "segredo do cliente": o build recusa um valor que não tenha o formato de ID.
+
+Como funciona e o que isso garante:
+
+- Cada pessoa clica em **Conectar conta Google** na aba Arquivos. O app só recebe o escopo `drive.file`: enxerga **apenas** o que ele mesmo criou
+  (a pasta "Arca (arquivos cifrados)"), nunca o resto do Drive.
+- Os arquivos já saem cifrados do navegador e têm nomes sem significado (`<uuid>.arca`): o Google só guarda blobs ilegíveis.
+- O token do Google (validade de ~1 h) fica **só na memória**: bloquear o cofre, sair ou fechar a aba o descarta; **Desconectar** também o revoga.
+  O app confere o `state`, o `aud` (seu Client ID) e o escopo antes de aceitar o token. Nenhum script do Google é carregado no site; a CSP libera
+  apenas `www.googleapis.com` e `oauth2.googleapis.com` (e só quando `GOOGLE_CLIENT_ID` está definido).
+- Para baixar ou apagar um arquivo é preciso estar com a conta Google dona dele conectada. Se um projeto for apagado sem a conta
+  conectada, os arquivos ficam no Drive da pessoa (o app avisa); ela apaga a pasta quando quiser.
+
+**Limites e o que NÃO foi verificado:** os testes usam um Google **simulado** (`tests/drive.e2e.test.mjs`); o fluxo real depende do seu Client ID
+e das telas do Google, e não pôde ser exercitado aqui. Se ao conectar o Google mostrar `redirect_uri_mismatch`, confira o passo 4. O fluxo usado
+(OAuth "implícito" em janela própria) é suportado pelo Google para apps web hoje; se um dia for descontinuado, só `js/google-drive.js` precisa trocar.

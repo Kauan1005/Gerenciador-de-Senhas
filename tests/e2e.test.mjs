@@ -191,8 +191,8 @@ try {
     await page.click("text=+ Adicionar hospedagem");
     const hostBox = page.locator("fieldset.entry").first();
     await fld(hostBox, "Provedor$").fill("Netlify");
-    await fld(hostBox, "Nome do site").fill("gerenciadorml");
-    await fld(hostBox, "Endereço público").fill("https://gerenciadorml.netlify.app");
+    await fld(hostBox, "Nome do site").fill("meu-site");
+    await fld(hostBox, "Endereço público").fill("https://meu-site.netlify.app");
     await fld(hostBox, "Como publica").selectOption("Git automático");
     await page.click('.ptab:has-text("Arquivos")');
     const original = Buffer.concat([Buffer.from("PK\x03\x04instalador-de-teste-"), Buffer.alloc(300000, 7)]);
@@ -209,7 +209,7 @@ try {
     const dp = await db(page);
     const praw = JSON.stringify(dp.tables.vault_projects);
     const sto = await page.evaluate(async () => { const out = []; for (const [k, b] of window.__fakeStorage) out.push([k, b.size, [...new Uint8Array(await b.arrayBuffer())].slice(0, 4).join(",")]); return out; });
-    ok(!praw.includes("Supabase") && !praw.includes("gerenciadorml") && !praw.includes("drtrifievfcjhvgjepcq"), "projetos: o servidor só guarda blob cifrado (sem provedor, nome ou identificador em claro)");
+    ok(!praw.includes("Supabase") && !praw.includes("meu-site") && !praw.includes("drtrifievfcjhvgjepcq"), "projetos: o servidor só guarda blob cifrado (sem provedor, nome ou identificador em claro)");
     ok(sto.length === 1 && sto[0][0].startsWith("project-files/" + dp.users[0].id + "/") && !sto[0][0].includes("gerenciador-1.0") && sto[0][1] > original.length && sto[0][2] !== "80,75,3,4", "arquivo: vai cifrado, com nome aleatório, na pasta do próprio usuário");
 
     // visão por banco de dados / por hospedagem

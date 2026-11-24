@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Arca">
+  <title>Arca</title>
+  <rect width="512" height="512" rx="116" fill="#141416"/>
+  <rect x="9" y="9" width="494" height="494" rx="108" fill="none" stroke="#2c2c30" stroke-width="4"/>
+  <!-- corpo da arca, com tampa arqueada -->
+  <path d="M96 232a160 160 0 0 1 320 0v168a28 28 0 0 1-28 28H124a28 28 0 0 1-28-28z" fill="#f2f0ee"/>
+  <!-- faixa de reforço -->
+  <rect x="96" y="262" width="320" height="16" fill="#141416"/>
+  <!-- fechadura -->
+  <rect x="222" y="238" width="68" height="76" rx="16" fill="#803232"/>
+  <circle cx="256" cy="268" r="11" fill="#f2f0ee"/>
+  <rect x="251" y="272" width="10" height="26" rx="4" fill="#f2f0ee"/>
+</svg>

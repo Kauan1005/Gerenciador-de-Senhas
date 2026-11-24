@@ -16,10 +16,11 @@ const dist = join(root, "dist");
 // Apaga o dist/ anterior ANTES de validar: se o build falhar, não sobra uma versão velha para alguém publicar sem querer.
 rmSync(dist, { recursive: true, force: true });
 
-const PUBLISH = ["index.html", "vault.html", "projects.html", "css", "img", "vendor"];
+const PUBLISH = ["index.html", "vault.html", "projects.html", "google-callback.html", "css", "img", "vendor"];
 const JS_FILES = [
   "theme.js", "ui-tabs.js", "crypto.js", "supabase-client.js", "auth.js", "session.js", "vault-data.js", "generator.js",
-  "clipboard.js", "credentials.js", "import-export.js", "backup.js", "autolock.js", "settings.js", "files.js", "projects.js"
+  "clipboard.js", "credentials.js", "import-export.js", "backup.js", "autolock.js", "settings.js", "google-drive.js", "google-callback.js",
+  "files.js", "projects.js"
 ];
 
 function fail(msg) {
@@ -31,18 +32,20 @@ function fail(msg) {
 function readConfig() {
   let url = process.env.SUPABASE_URL;
   let key = process.env.SUPABASE_ANON_KEY;
+  let google = process.env.GOOGLE_CLIENT_ID;
   let extra = {};
   const local = join(root, "js", "config.js");
-  if ((!url || !key) && existsSync(local)) {
+  if (existsSync(local)) {
     const text = readFileSync(local, "utf8");
     url ||= (text.match(/SUPABASE_URL:\s*"([^"]+)"/) || [])[1];
     key ||= (text.match(/SUPABASE_ANON_KEY:\s*"([^"]+)"/) || [])[1];
-    for (const k of ["KDF_ITERATIONS", "AUTO_LOCK_MINUTES", "CLIPBOARD_CLEAR_SECONDS", "MAX_FILE_MB"]) {
+    google ??= (text.match(/GOOGLE_CLIENT_ID:\s*"([^"]*)"/) || [])[1];
+    for (const k of ["KDF_ITERATIONS", "AUTO_LOCK_MINUTES", "CLIPBOARD_CLEAR_SECONDS", "MAX_FILE_MB", "MAX_FILE_MB_DRIVE"]) {
       const m = text.match(new RegExp(k + ":\\s*(\\d+)"));
       if (m) extra[k] = Number(m[1]);
     }
   }
-  return { url, key, extra };
+  return { url, key, extra, google: (google || "").trim() };
 }
 
 // Trava de segurança: a chave de serviço ignora a RLS. Se ela for parar no site, qualquer pessoa leria tudo.
@@ -59,7 +62,12 @@ function assertPublicKey(key) {
   }
 }
 
-const { url, key, extra } = readConfig();
+const { url, key, extra, google } = readConfig();
+// O Client ID do Google é público por natureza (aparece na URL de login), mas precisa ter o formato certo:
+// assim um segredo colado por engano (GOCSPX-...) ou um valor estranho não vai para o site nem para a CSP.
+if (google && !/^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/i.test(google)) {
+  fail("GOOGLE_CLIENT_ID inválido: deve ter o formato 123456-abc.apps.googleusercontent.com (o ID do cliente OAuth, nunca o segredo do cliente).");
+}
 if (!url || !key) fail("Defina SUPABASE_URL e SUPABASE_ANON_KEY (variáveis de ambiente) ou crie js/config.js a partir de js/config.example.js.");
 let host;
 try {
@@ -82,13 +90,19 @@ const cfg = {
   AUTO_LOCK_MINUTES: extra.AUTO_LOCK_MINUTES ?? 5,
   CLIPBOARD_CLEAR_SECONDS: extra.CLIPBOARD_CLEAR_SECONDS ?? 20,
   MAX_FILE_MB: extra.MAX_FILE_MB ?? 50,
+  MAX_FILE_MB_DRIVE: extra.MAX_FILE_MB_DRIVE ?? 200,
+  GOOGLE_CLIENT_ID: google,
   MIN_MASTER_LENGTH: 5,
   SESSION_STORE: "tab",
   LEGACY_LOGIN: process.env.LEGACY_LOGIN === "false" ? false : true
 };
 writeFileSync(join(dist, "js", "config.js"), "window.APP_CONFIG = " + JSON.stringify(cfg, null, 2) + ";\n");
 
-const headers = readFileSync(join(root, "_headers"), "utf8").replaceAll("__SUPABASE_HOST__", host);
+// Sem Google configurado, a CSP não libera nenhum host do Google.
+const googleConnect = google ? "https://www.googleapis.com https://oauth2.googleapis.com" : "";
+const headers = readFileSync(join(root, "_headers"), "utf8")
+  .replaceAll("__SUPABASE_HOST__", host)
+  .replaceAll(" __GOOGLE_CONNECT__", googleConnect ? " " + googleConnect : "");
 writeFileSync(join(dist, "_headers"), headers);
 
-console.log(`dist/ pronto. Supabase: ${host}. LEGACY_LOGIN=${cfg.LEGACY_LOGIN}`);
+console.log(`dist/ pronto. Supabase: ${host}. Google Drive: ${google ? "ligado" : "desligado (arquivos no Supabase)"}. LEGACY_LOGIN=${cfg.LEGACY_LOGIN}`);

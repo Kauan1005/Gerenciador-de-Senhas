@@ -23,6 +23,15 @@ ok(headers.includes("connect-src 'self' https://abcdefghij.supabase.co") && !hea
 const cfg = readFileSync(join(dist, "js", "config.js"), "utf8");
 ok(cfg.includes("abcdefghij.supabase.co") && /"KDF_ITERATIONS": 600000/.test(cfg) && /"LEGACY_LOGIN": true/.test(cfg) && /"SESSION_STORE": "tab"/.test(cfg), "o config.js gerado traz os padrões seguros (600 mil iterações, sessão só na aba)");
 
+ok(!headers.includes("googleapis") && !headers.includes("__GOOGLE") && /"GOOGLE_CLIENT_ID": ""/.test(cfg) && all.includes("google-callback.html"), "sem GOOGLE_CLIENT_ID a CSP não libera o Google (os arquivos ficam no Supabase)");
+
+const GID = "123456789-abcdef.apps.googleusercontent.com";
+const withG = run({ SUPABASE_URL: "https://abcdefghij.supabase.co", SUPABASE_ANON_KEY: jwt("anon"), GOOGLE_CLIENT_ID: GID });
+const hg = readFileSync(join(dist, "_headers"), "utf8");
+ok(withG.status === 0 && hg.includes("connect-src 'self' https://abcdefghij.supabase.co https://www.googleapis.com https://oauth2.googleapis.com;") && readFileSync(join(dist, "js", "config.js"), "utf8").includes(GID), "com GOOGLE_CLIENT_ID a CSP libera só os dois hosts de API do Google e o ID vai para o config.js");
+const badG = run({ SUPABASE_URL: "https://abcdefghij.supabase.co", SUPABASE_ANON_KEY: jwt("anon"), GOOGLE_CLIENT_ID: "GOCSPX-segredo-do-cliente" });
+ok(badG.status !== 0 && /GOOGLE_CLIENT_ID/.test(badG.stderr) && !existsSync(join(dist, "js", "config.js")), "um valor que não é Client ID (ex.: o segredo GOCSPX-...) é RECUSADO");
+
 const svc = run({ SUPABASE_URL: "https://abcdefghij.supabase.co", SUPABASE_ANON_KEY: jwt("service_role") });
 ok(svc.status !== 0 && /service_role/.test(svc.stderr) && !existsSync(join(dist, "js", "config.js")), "chave com papel service_role é RECUSADA (e dist/ não é gerado)");
 const sec = run({ SUPABASE_URL: "https://abcdefghij.supabase.co", SUPABASE_ANON_KEY: "sb_secret_abc123" });

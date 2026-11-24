@@ -8,7 +8,9 @@ window.APP_CONFIG = {
   AUTO_LOCK_MINUTES: 5,         // bloqueio automático por inatividade
   CLIPBOARD_CLEAR_SECONDS: 20,  // limpeza automática da área de transferência
   MAX_FILE_MB: 50,              // limite por arquivo de projeto (teto do plano gratuito do Supabase)
-  MIN_MASTER_LENGTH: 5,         // tamanho mínimo da senha mestra (cadastro e troca)
+  GOOGLE_CLIENT_ID: "",         // opcional: ID do cliente OAuth (Google Cloud). Preenchido, cada pessoa guarda os arquivos no PRÓPRIO Google Drive
+  MAX_FILE_MB_DRIVE: 200,       // limite por arquivo quando os arquivos vão para o Google Drive
+  MIN_MASTER_LENGTH: 5,        // tamanho mínimo da senha mestra (cadastro e troca)
   SESSION_STORE: "tab",         // "tab" = login só na aba (padrão) | "browser" = persiste no navegador
   LEGACY_LOGIN: true            // aceita contas antigas (login com a própria senha mestra) e as migra; use false depois de migrar
 };

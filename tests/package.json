@@ -4,10 +4,11 @@
   "type": "module",
   "description": "Testes do Cofre. Só desenvolvimento: o site em si não usa npm.",
   "scripts": {
-    "test": "node crypto.test.mjs && node build.test.mjs && node e2e.test.mjs",
+    "test": "node crypto.test.mjs && node build.test.mjs && node e2e.test.mjs && node drive.e2e.test.mjs",
     "test:crypto": "node crypto.test.mjs",
     "test:build": "node build.test.mjs",
-    "test:e2e": "node e2e.test.mjs"
+    "test:e2e": "node e2e.test.mjs",
+    "test:drive": "node drive.e2e.test.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.56.1"

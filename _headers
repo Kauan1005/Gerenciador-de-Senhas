@@ -1,9 +1,9 @@
 # Cabeçalhos de segurança (Netlify). O build troca __SUPABASE_HOST__ pelo host do seu projeto Supabase.
 #
 # CSP: só roda JavaScript e CSS do PRÓPRIO site (nada de CDN de terceiros, nada inline) e só fala com
-# o próprio site e com o seu projeto Supabase. Isso é a principal barreira contra XSS num cofre de senhas.
+# o próprio site e com o seu projeto Supabase (e, só se GOOGLE_CLIENT_ID estiver definido, com as APIs do Google Drive). Isso é a principal barreira contra XSS num cofre de senhas.
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://__SUPABASE_HOST__; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://__SUPABASE_HOST__ __GOOGLE_CONNECT__; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer

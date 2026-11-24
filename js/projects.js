@@ -35,7 +35,7 @@ const DB_FIELDS = [
 
 const HOST_FIELDS = [
   { k: "provider", label: "Provedor", list: "host-providers", placeholder: "Netlify, Vercel…" },
-  { k: "name", label: "Nome do site / serviço", placeholder: "Ex.: gerenciadorml" },
+  { k: "name", label: "Nome do site / serviço", placeholder: "Ex.: meu-site" },
   { k: "url", label: "Endereço público", url: true, placeholder: "https://…" },
   { k: "dashboardUrl", label: "Painel de administração", url: true, placeholder: "https://…" },
   { k: "domain", label: "Domínio próprio", placeholder: "Ex.: cofre.minhaempresa.com.br" },
@@ -101,14 +101,12 @@ async function persistProject(p) {
   if (error) throw error;
 }
 
+// Apaga o projeto e tenta apagar os arquivos. Devolve os arquivos que NÃO foram apagados (ex.: Google desconectado).
 async function removeProject(p) {
-  try {
-    await FileStore.remove(p.files);
-  } catch (err) {
-    console.error("Alguns arquivos não puderam ser removidos do Storage", err);
-  }
+  const { failed } = await FileStore.remove(p.files);
   const { error } = await sb.from("vault_projects").delete().eq("id", p.id).eq("user_id", VaultSession.userId);
   if (error) throw error;
+  return failed;
 }
 
 async function reloadProjects() {
@@ -210,7 +208,9 @@ function updateStorageMeter() {
   const used = allProjects.reduce((a, p) => a + p.files.reduce((b, f) => b + (f.size || 0), 0), 0);
   const meter = document.getElementById("storage-meter");
   if (!meter) return;
-  meter.textContent = `Arquivos guardados: ${formatBytes(used)} de ~${formatBytes(STORAGE_QUOTA_BYTES)} (plano gratuito)`;
+  meter.textContent = GoogleDrive.enabled()
+    ? `Arquivos nos Google Drives das pessoas donas dos projetos: ${formatBytes(used)} neste cofre`
+    : `Arquivos guardados: ${formatBytes(used)} de ~${formatBytes(STORAGE_QUOTA_BYTES)} (plano gratuito)`;
   meter.hidden = used === 0 && allProjects.length === 0;
 }
 
@@ -239,7 +239,7 @@ async function closeProject(save) {
   if (!save) {
     // cancelou: o que foi enviado nesta edição e não foi salvo sai do Storage
     const orphans = uploadedNow.filter((f) => !originalFileIds.has(f.id));
-    if (orphans.length) FileStore.remove(orphans).catch(console.error);
+    if (orphans.length) FileStore.remove(orphans);
   }
   document.getElementById("project-modal").hidden = true;
   current = null;
@@ -409,22 +409,71 @@ function linkedCredentials(entry) {
 
 /* ---- aba Arquivos ---- */
 
+async function connectGoogle() {
+  try {
+    toast("Abrindo a janela do Google…");
+    await GoogleDrive.connect();
+    toast("Google Drive conectado.");
+    if (current) renderEditor();
+    return true;
+  } catch (err) {
+    console.error(err);
+    toast((err && err.message) || "Não foi possível conectar ao Google.");
+    return false;
+  }
+}
+
+// Onde os arquivos ficam e o estado da conexão com a conta Google da pessoa.
+function driveBar() {
+  const bar = el("div", "drive-bar");
+  if (!GoogleDrive.enabled()) {
+    bar.append(el("span", "hint", "Os arquivos ficam no armazenamento do Supabase (cota compartilhada de cerca de 1 GB)."));
+    return bar;
+  }
+  const acc = GoogleDrive.getAccount();
+  if (acc) {
+    bar.append(el("span", "drive-bar__ok", `Google Drive conectado: ${acc.email}`));
+    bar.append(el("span", "hint", acc.free != null ? `${formatBytes(acc.free)} livres no seu Drive` : "espaço do seu Drive"));
+    const off = el("button", "btn btn--ghost btn--small", "Desconectar");
+    off.type = "button";
+    off.addEventListener("click", async () => {
+      await GoogleDrive.disconnect();
+      toast("Google desconectado e acesso revogado.");
+      if (current) renderEditor();
+    });
+    bar.append(off);
+  } else {
+    bar.append(el("span", "hint", `Os arquivos ficam no SEU Google Drive, na pasta "${GoogleDrive.FOLDER_NAME}", cifrados e com nomes sem significado. O app só enxerga o que ele mesmo criou ali.`));
+    const on = el("button", "btn btn--primary btn--small", GoogleDrive.hint() ? `Conectar (${GoogleDrive.hint()})` : "Conectar conta Google");
+    on.type = "button";
+    on.addEventListener("click", connectGoogle);
+    bar.append(on);
+  }
+  return bar;
+}
+
 function filesTab() {
   const wrap = el("div", "files");
   const maxMb = (FileStore.limitBytes() / 1048576).toFixed(0);
   wrap.append(el("p", "hint", `Instaladores, .zip, .apk e outros arquivos do projeto. São cifrados aqui no navegador antes de subir (limite de ${maxMb} MB por arquivo). Para uma pasta, compacte em .zip.`));
+  wrap.append(driveBar());
 
-  const drop = el("label", "dropzone");
-  drop.append(el("span", "dropzone__title", "Escolher arquivos"), el("span", "hint", "ou solte aqui"));
+  const blocked = GoogleDrive.enabled() && !GoogleDrive.connected();
+  const drop = el("label", "dropzone" + (blocked ? " is-disabled" : ""));
+  drop.append(
+    el("span", "dropzone__title", blocked ? "Conecte sua conta Google para enviar arquivos" : "Escolher arquivos"),
+    el("span", "hint", blocked ? "os arquivos vão para o seu Drive pessoal" : "ou solte aqui")
+  );
   const input = el("input");
   input.type = "file";
+  input.disabled = blocked;
   input.multiple = true;
   input.hidden = true;
   input.id = "project-file-input";
   drop.append(input);
   ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("is-over"); }));
   ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("is-over"); }));
-  drop.addEventListener("drop", (e) => addFiles([...e.dataTransfer.files]));
+  drop.addEventListener("drop", (e) => { if (!blocked) addFiles([...e.dataTransfer.files]); });
   input.addEventListener("change", () => { addFiles([...input.files]); input.value = ""; });
   wrap.append(drop);
 
@@ -469,7 +518,7 @@ function fileRow(f, index) {
     if (!window.confirm(`Remover "${f.name}" deste projeto? O arquivo será apagado do armazenamento ao salvar.`)) return;
     const [gone] = current.files.splice(index, 1);
     if (originalFileIds.has(gone.id)) removedNow.push(gone);
-    else FileStore.remove([gone]).catch(console.error); // enviado nesta edição e já descartado
+    else FileStore.remove([gone]); // enviado nesta edição e já descartado
     uploadedNow = uploadedNow.filter((u) => u.id !== gone.id);
     renderEditor();
   });
@@ -491,13 +540,18 @@ async function addFiles(files) {
       toast(`"${file.name}" enviado e cifrado. Clique em Salvar para guardar o projeto.`);
     } catch (err) {
       console.error(err);
-      toast(err && err.message && /limite|MB/.test(err.message) ? err.message : `Não foi possível enviar "${file.name}".`);
-      if (status()) status().textContent = "";
+      if (err && err.needsGoogle) renderEditor(); // token expirou: volta a mostrar "Conectar"
+      toast(err && err.message && (err.needsGoogle || /limite|MB/.test(err.message)) ? err.message : `Não foi possível enviar "${file.name}".`);
+      if (status() && !(err && err.needsGoogle)) status().textContent = "";
     }
   }
 }
 
 async function downloadFile(f, button) {
+  // arquivo no Drive: precisa da conta conectada (este clique é o gesto que permite abrir a janela do Google)
+  if (FileStore.storeOf(f) === "drive" && !GoogleDrive.connected()) {
+    if (!(await connectGoogle())) return;
+  }
   button.disabled = true;
   try {
     toast(`Baixando e decifrando "${f.name}"…`);
@@ -513,7 +567,8 @@ async function downloadFile(f, button) {
     toast(`"${f.name}" baixado. SHA-256 conferido.`);
   } catch (err) {
     console.error(err);
-    toast(err && /SHA-256/.test(err.message) ? err.message : "Não foi possível baixar este arquivo.");
+    if (err && err.needsGoogle) renderEditor();
+    toast(err && /SHA-256|Google|Drive/.test(err.message || "") ? err.message : "Não foi possível baixar este arquivo.");
   } finally {
     button.disabled = false;
   }
@@ -563,12 +618,12 @@ async function saveCurrent() {
   saveBtn.disabled = true;
   try {
     await persistProject(cleanForSave(current));
-    if (removedNow.length) await FileStore.remove(removedNow).catch(console.error);
+    const leftover = removedNow.length ? (await FileStore.remove(removedNow)).failed.length : 0;
     uploadedNow = []; // agora fazem parte do projeto salvo
     removedNow = [];
     document.getElementById("project-modal").hidden = true;
     current = null;
-    toast("Projeto salvo.");
+    toast(leftover ? `Projeto salvo. ${leftover} arquivo(s) removido(s) continuam no seu Google Drive (conta desconectada): conecte e apague na pasta "${GoogleDrive.FOLDER_NAME}".` : "Projeto salvo.");
     await reloadProjects();
   } catch (err) {
     console.error(err);
@@ -582,12 +637,15 @@ async function saveCurrent() {
 async function deleteCurrent() {
   const p = allProjects.find((x) => x.id === current.id);
   if (!p) return;
-  if (!window.confirm(`Excluir o projeto "${p.name}" e os ${p.files.length} arquivo(s) guardados nele? Essa ação não pode ser desfeita.`)) return;
+  const keep = FileStore.needsGoogle(p.files) && !GoogleDrive.connected()
+    ? ` Sua conta Google não está conectada: os arquivos continuarão no seu Drive (pasta "${GoogleDrive.FOLDER_NAME}").`
+    : "";
+  if (!window.confirm(`Excluir o projeto "${p.name}" e os ${p.files.length} arquivo(s) guardados nele? Essa ação não pode ser desfeita.${keep}`)) return;
   try {
-    await removeProject(p);
+    const failed = await removeProject(p);
     document.getElementById("project-modal").hidden = true;
     current = null;
-    toast("Projeto excluído.");
+    toast(failed.length ? `Projeto excluído. ${failed.length} arquivo(s) continuam no seu Google Drive.` : "Projeto excluído.");
     await reloadProjects();
   } catch (err) {
     console.error(err);
@@ -655,6 +713,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
   document.getElementById("btn-logout").addEventListener("click", async () => {
+    GoogleDrive.clear();
     await sb.auth.signOut();
     VaultSession.clear();
     window.location.href = "index.html";

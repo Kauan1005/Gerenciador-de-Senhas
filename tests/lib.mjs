@@ -9,11 +9,13 @@ export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const FAKE_HOST = "fake.supabase.test";
 
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".png": "image/png", ".json": "application/json", ".txt": "text/plain" };
-const PUBLIC = [/^\/(index|vault|projects)\.html$/, /^\/css\//, /^\/img\//, /^\/vendor\//, /^\/js\/(?!config)/];
+const PUBLIC = [/^\/(index|vault|projects|google-callback)\.html$/, /^\/css\//, /^\/img\//, /^\/vendor\//, /^\/js\/(?!config)/];
 
 // Lê o primeiro bloco ("/*") do _headers, trocando o host do Supabase.
-export function securityHeaders() {
-  const text = readFileSync(join(ROOT, "_headers"), "utf8").replaceAll("__SUPABASE_HOST__", FAKE_HOST);
+export function securityHeaders(google = false) {
+  const text = readFileSync(join(ROOT, "_headers"), "utf8")
+    .replaceAll("__SUPABASE_HOST__", FAKE_HOST)
+    .replaceAll(" __GOOGLE_CONNECT__", google ? " https://www.googleapis.com https://oauth2.googleapis.com" : "");
   const out = {};
   const lines = text.split(/\r?\n/);
   let inBlock = false;
@@ -29,7 +31,7 @@ export function securityHeaders() {
 }
 
 export async function startServer(configOverrides = {}) {
-  const headers = securityHeaders();
+  const headers = securityHeaders(!!configOverrides.GOOGLE_CLIENT_ID);
   const config = {
     SUPABASE_URL: `https://${FAKE_HOST}`,
     SUPABASE_ANON_KEY: "anon-de-teste",

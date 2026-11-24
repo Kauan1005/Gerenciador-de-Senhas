@@ -1,6 +1,6 @@
-# Relatório de segurança do Cofre
+# Relatório de segurança da Arca
 
-Revisão feita sobre o código do repositório, o site publicado (`gerenciadorml.netlify.app`) e o projeto Supabase, **somente com a
+Revisão feita sobre o código do repositório, o site publicado e o projeto Supabase, **somente com a
 chave pública do próprio site** (leitura e escrita anônimas negadas; nenhum dado foi lido ou criado no seu banco).
 Método: revisão de código com a skill `security-review` (OWASP), rastreando o caminho dos dados antes de apontar cada achado, mais testes
 automatizados de cada correção (`tests/`).
@@ -49,7 +49,13 @@ automatizados de cada correção (`tests/`).
    aceitar arriscar. Não há recuperação se a senha for esquecida.
 4. **`LEGACY_LOGIN: true` durante a migração.** Enquanto ligado, uma senha errada pode ser enviada ao servidor numa segunda tentativa
    (compatibilidade com contas antigas). Desligue assim que todas as contas migrarem (README, seção 10).
-5. **Arquivos de projeto ficam no Storage do mesmo Supabase.** Estão cifrados, mas o Storage tem teto de ~1 GB no plano gratuito.
+5. **Onde ficam os arquivos de projeto.** Com `GOOGLE_CLIENT_ID` (README, seção 11), no **Google Drive de cada pessoa**: cota individual, e
+   o risco de uma conta esgotar a cota dos outros some para arquivos. O app pede só `drive.file` (vê apenas o que criou), recebe o token por
+   janela própria, o guarda só em memória, confere `state`/`aud`/escopo e o revoga ao desconectar; a CSP só libera os hosts do Google quando ele
+   está ligado. Os arquivos chegam cifrados (nome `<uuid>.arca`). Resíduos: quem controla a conta Google da pessoa pode apagar ou trocar o blob
+   (o download é recusado se o SHA-256 não bater, mas o arquivo se perde); o fluxo OAuth implícito é o mais simples sem servidor, porém o Google o
+   considera legado para novos apps de servidor (para web "sem back-end" segue disponível). **Sem Google configurado**, os arquivos ficam no
+   Storage do Supabase (~1 GB compartilhado, ver item 1). Não testado contra o Google real.
 6. **Não foi possível testar contra o seu Supabase real** (as credenciais são suas). Os testes usam um simulado fiel ao uso do app, e o SQL
    foi escrito para ser seguro, mas rode-o e confira com as consultas ao final do `schema.sql`.
 
