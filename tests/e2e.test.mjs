@@ -509,6 +509,24 @@ try {
     await ctx.close();
   }
 
+  // ================= 5e) planilha de exemplo de importação
+  {
+    const { ctx, page } = await open();
+    await signup(page);
+    const [ex] = await Promise.all([page.waitForEvent("download"), menu(page, "btn-import-example")]);
+    ok(ex.suggestedFilename() === "arca-exemplo-importacao.xlsx", "menu: \"Baixar exemplo de importação\" baixa a planilha de exemplo (.xlsx)");
+    const exPath = await ex.path();
+    const info = await page.evaluate(async (b64) => {
+      const wb = XLSX.read(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)), { type: "array" });
+      const first = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+      return { sheets: wb.SheetNames, cols: Object.keys(first[0] || {}), n: first.length };
+    }, readFileSync(exPath).toString("base64"));
+    ok(info.sheets[0] === "Senhas" && info.sheets.includes("Como usar") && info.cols.join(",") === "Site,Usuário,Senha,URL,Notas" && info.n === 2, "o exemplo tem a aba Senhas (com as 5 colunas e 2 linhas) e a aba Como usar");
+    await page.setInputFiles("#import-file-input", { name: "arca-exemplo-importacao.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: readFileSync(exPath) });
+    ok(await until(async () => (await toast(page)).includes("2 adicionada")), "e o próprio exemplo é aceito pelo importador (ida e volta)");
+    await ctx.close();
+  }
+
   // ================= 6) auto-bloqueio por inatividade (relógio simulado)
   {
     const { ctx, page } = await open();

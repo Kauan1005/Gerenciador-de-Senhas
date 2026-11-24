@@ -106,6 +106,36 @@ function download(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// Planilha de exemplo (só dados fictícios) para a pessoa preencher e importar. A primeira aba é a que o importador lê.
+function downloadImportExample() {
+  const rows = [
+    { Site: "Exemplo: Gmail", "Usuário": "seu.email@exemplo.com", Senha: "troque-esta-senha", URL: "https://mail.google.com", Notas: "apague estas linhas de exemplo antes de importar" },
+    { Site: "Exemplo: Banco", "Usuário": "12345-6", Senha: "outra-senha-de-exemplo", URL: "https://www.seubanco.com.br", Notas: "" }
+  ];
+  const help = [
+    ["Como importar na Arca"],
+    [""],
+    ["1. Preencha a aba \"Senhas\": uma linha por login. Mantenha a primeira linha (os nomes das colunas)."],
+    ["2. Apague as duas linhas de exemplo."],
+    ["3. Salve como .xlsx (ou .csv) e, na Arca, use o menu da conta > Importar CSV / Excel."],
+    [""],
+    ["Colunas: Site (obrigatória), Usuário, Senha (obrigatória), URL, Notas."],
+    ["Também são aceitos: Título/Nome/Serviço no lugar de Site; E-mail/Login no lugar de Usuário; Link/Website no lugar de URL; Observações no lugar de Notas."],
+    ["Limites: 5.000 linhas e 5 MB por arquivo. Só a primeira aba é lida."],
+    [""],
+    ["IMPORTANTE: esta planilha guarda senhas em texto puro. Depois de importar, apague o arquivo e esvazie a Lixeira."]
+  ];
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.json_to_sheet(rows, { header: ["Site", "Usuário", "Senha", "URL", "Notas"] });
+  sheet["!cols"] = [{ wch: 26 }, { wch: 28 }, { wch: 26 }, { wch: 34 }, { wch: 44 }];
+  const helpSheet = XLSX.utils.aoa_to_sheet(help);
+  helpSheet["!cols"] = [{ wch: 110 }];
+  XLSX.utils.book_append_sheet(workbook, sheet, "Senhas");
+  XLSX.utils.book_append_sheet(workbook, helpSheet, "Como usar");
+  XLSX.writeFile(workbook, "arca-exemplo-importacao.xlsx");
+  toast("Exemplo baixado. Preencha a aba \"Senhas\" e depois use Importar CSV / Excel.");
+}
+
 async function exportPlain(format) {
   if (!allCredentials || allCredentials.length === 0) {
     toast("Não há credenciais para exportar.");
@@ -190,6 +220,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const importBtn = document.getElementById("btn-import");
   const importInput = document.getElementById("import-file-input");
 
+  document.getElementById("btn-import-example")?.addEventListener("click", downloadImportExample);
   document.getElementById("btn-export-csv")?.addEventListener("click", () => exportPlain("csv"));
   document.getElementById("btn-export")?.addEventListener("click", () => exportPlain("xlsx"));
 
