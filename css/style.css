@@ -260,8 +260,35 @@ textarea { resize: vertical; }
 .btn--small { min-height: 34px; padding: 0 12px; font-size: 13px; }
 .panel .btn--primary, .panel .btn--ghost:not(.btn--small) { width: 100%; }
 .panel .btn--small { min-height: 36px; }
-#btn-forgot-password { border-color: transparent; color: var(--text-dim); align-self: center; }
-#btn-forgot-password:hover:not(:disabled) { color: var(--text); background: transparent; border-color: transparent; }
+/* "Esqueci minha senha": link discreto logo abaixo do campo, e o aviso de resposta em largura total */
+.link-btn {
+  align-self: flex-end;
+  margin-top: -8px;
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  color: var(--text-dim);
+  font: 600 13px var(--font-body);
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+.link-btn:hover:not(:disabled) { color: var(--text); text-decoration-color: var(--accent); }
+.link-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.link-btn:disabled { opacity: 0.6; cursor: progress; }
+.notice {
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.notice--error { background: var(--danger-soft); border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); }
 
 .footnote { margin: 0; color: var(--text-dim); font-size: 12.5px; text-align: center; }
 

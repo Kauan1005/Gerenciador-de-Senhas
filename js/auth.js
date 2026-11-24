@@ -294,24 +294,38 @@ const AuthModule = (() => {
   }
 
   // Manda o e-mail de redefinição do Supabase. A tela recovery.html pede a chave de recuperação e define a nova senha mestra.
+  // O texto de sucesso é o mesmo exista ou não um cofre com esse e-mail (não revela quem tem conta).
   async function handleForgotPassword(email) {
     const messageEl = document.getElementById("forgot-password-message");
-    if (!email) {
-      messageEl.textContent = "Preencha seu e-mail no campo acima primeiro.";
+    const btn = document.getElementById("btn-forgot-password");
+    const show = (text, isError) => {
+      messageEl.textContent = text;
+      messageEl.classList.toggle("notice--error", !!isError);
       messageEl.hidden = false;
+      messageEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    };
+    if (!email) {
+      show("Digite seu e-mail no campo acima e clique de novo em \"Esqueci minha senha mestra\".", true);
+      document.getElementById("login-email")?.focus();
       return;
     }
-    const btn = document.getElementById("btn-forgot-password");
+    const label = btn.textContent;
     btn.disabled = true;
+    btn.textContent = "Enviando…";
     try {
-      await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/recovery.html" });
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/recovery.html" });
+      if (error && (error.status === 429 || /rate limit|too many/i.test(error.message || ""))) {
+        show("Muitas solicitações seguidas. Aguarde alguns minutos e tente de novo.", true);
+      } else {
+        if (error) console.warn("[Arca] reset de senha:", error.message);
+        show("Se esse e-mail tiver um cofre, enviamos um link de recuperação. Confira também a caixa de spam. Com o link você vai informar a chave de recuperação e escolher uma nova senha mestra.");
+      }
     } catch (err) {
       console.error(err);
-      // mesmo texto em caso de erro: não revela se o e-mail tem cofre
+      show("Se esse e-mail tiver um cofre, enviamos um link de recuperação. Confira também a caixa de spam.");
     } finally {
       btn.disabled = false;
-      messageEl.textContent = "Se esse e-mail tiver um cofre, enviamos um link de recuperação.";
-      messageEl.hidden = false;
+      btn.textContent = label;
     }
   }
 
