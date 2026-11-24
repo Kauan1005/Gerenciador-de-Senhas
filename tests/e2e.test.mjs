@@ -521,9 +521,9 @@ try {
       const first = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
       return { sheets: wb.SheetNames, cols: Object.keys(first[0] || {}), n: first.length };
     }, readFileSync(exPath).toString("base64"));
-    ok(info.sheets[0] === "Senhas" && info.sheets.includes("Como usar") && info.cols.join(",") === "Site,Usuário,Senha,URL,Notas" && info.n === 2, "o exemplo tem a aba Senhas (com as 5 colunas e 2 linhas) e a aba Como usar");
+    ok(info.sheets[0] === "Senhas" && info.sheets.includes("Como usar") && info.cols.join(",") === "Site,Usuário,Senha,URL,Notas" && info.n === 3, "o exemplo tem a aba Senhas (com as 5 colunas e 3 linhas de exemplo) e a aba Como usar");
     await page.setInputFiles("#import-file-input", { name: "arca-exemplo-importacao.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: readFileSync(exPath) });
-    ok(await until(async () => (await toast(page)).includes("2 adicionada")), "e o próprio exemplo é aceito pelo importador (ida e volta)");
+    ok(await until(async () => (await toast(page)).includes("3 adicionada")), "e o próprio exemplo é aceito pelo importador (ida e volta)");
     await ctx.close();
   }
 

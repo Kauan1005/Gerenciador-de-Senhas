@@ -110,13 +110,14 @@ function download(blob, filename) {
 function downloadImportExample() {
   const rows = [
     { Site: "Exemplo: Gmail", "Usuário": "seu.email@exemplo.com", Senha: "troque-esta-senha", URL: "https://mail.google.com", Notas: "apague estas linhas de exemplo antes de importar" },
-    { Site: "Exemplo: Banco", "Usuário": "12345-6", Senha: "outra-senha-de-exemplo", URL: "https://www.seubanco.com.br", Notas: "" }
+    { Site: "Exemplo: Banco", "Usuário": "12345-6", Senha: "outra-senha-de-exemplo", URL: "https://www.seubanco.com.br", Notas: "" },
+    { Site: "Exemplo: Streaming", "Usuário": "voce@exemplo.com", Senha: "senha-exemplo-3", URL: "https://www.seustreaming.com.br", Notas: "plano família" }
   ];
   const help = [
     ["Como importar na Arca"],
     [""],
     ["1. Preencha a aba \"Senhas\": uma linha por login. Mantenha a primeira linha (os nomes das colunas)."],
-    ["2. Apague as duas linhas de exemplo."],
+    ["2. Apague as três linhas de exemplo."],
     ["3. Salve como .xlsx (ou .csv) e, na Arca, use o menu da conta > Importar CSV / Excel."],
     [""],
     ["Colunas: Site (obrigatória), Usuário, Senha (obrigatória), URL, Notas."],
