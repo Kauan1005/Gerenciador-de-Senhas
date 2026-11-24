@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Projetos · ML Gomes Cofre</title>
+  <link rel="icon" type="image/png" href="img/logo.png" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/vault.css" />
+  <link rel="stylesheet" href="css/projects.css" />
+  <script src="js/theme.js"></script>
+</head>
+<body class="vault-body">
+
+  <header class="topbar">
+    <div class="topbar__brand">
+      <img src="img/logo.png" alt="" class="brand__mark" />
+      <span class="brand__name">ML Cofre</span>
+    </div>
+
+    <nav class="topnav" aria-label="Seções do cofre">
+      <a class="topnav__link" href="vault.html" data-nav>Senhas</a>
+      <a class="topnav__link is-active" href="projects.html" aria-current="page" data-nav>Projetos</a>
+    </nav>
+
+    <label class="search" role="search">
+      <span class="search__icon" aria-hidden="true">&#128269;</span>
+      <input type="search" id="search-input" placeholder="Pesquisar projeto, banco, hospedagem ou arquivo" autocomplete="off" />
+    </label>
+
+    <div class="topbar__actions">
+      <button class="btn btn--primary" id="btn-new-project">+ Novo projeto</button>
+      <div class="account-menu">
+        <button class="account-menu__trigger" id="account-menu-trigger" aria-haspopup="true" aria-expanded="false">
+          <span id="account-email">&hellip;</span>
+          <span aria-hidden="true">&#9662;</span>
+        </button>
+        <div class="account-menu__panel" id="account-menu-panel" hidden>
+          <button class="account-menu__item" id="btn-lock-now">Bloquear agora</button>
+          <button class="account-menu__item" id="btn-theme-toggle" data-theme-toggle>Tema claro</button>
+          <button class="account-menu__item" id="btn-change-master">Alterar senha mestra</button>
+          <button class="account-menu__item" id="btn-backup">Criar backup</button>
+          <button class="account-menu__item" id="btn-restore">Restaurar backup</button>
+          <button class="account-menu__item account-menu__item--danger" id="btn-logout">Sair</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <p class="upgrade-banner" id="upgrade-banner" role="status" hidden></p>
+
+  <main class="vault-main">
+    <div class="proj-toolbar">
+      <div class="seg" role="group" aria-label="Organizar por">
+        <button type="button" class="seg__btn" data-group="project" aria-pressed="true">Por projeto</button>
+        <button type="button" class="seg__btn" data-group="database" aria-pressed="false">Por banco de dados</button>
+        <button type="button" class="seg__btn" data-group="hosting" aria-pressed="false">Por hospedagem</button>
+      </div>
+      <p class="hint" id="storage-meter" hidden></p>
+    </div>
+
+    <p class="empty-state" id="projects-empty" hidden>
+      Nenhum projeto ainda. Clique em <strong>+ Novo projeto</strong> para guardar onde ele está
+      (banco de dados e hospedagem) e os arquivos para instalar de novo.
+    </p>
+    <p class="empty-state" id="projects-noresults" hidden>Nada encontrado para essa busca.</p>
+    <div id="projects-list" aria-live="polite"></div>
+  </main>
+
+  <!-- MODAL: criar / editar projeto -->
+  <div class="modal-backdrop" id="project-modal" hidden>
+    <div class="modal modal--wide" role="dialog" aria-modal="true" aria-labelledby="project-title">
+      <div class="modal__header">
+        <h2 class="modal__title" id="project-title">Novo projeto</h2>
+        <button class="modal__close" id="project-close" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="ptabs" id="project-tabs" role="tablist"></div>
+      <div class="modal__body" id="project-body"></div>
+      <p class="form-error" id="project-error" role="alert" hidden></p>
+      <div class="modal__footer">
+        <button type="button" class="btn btn--danger" id="btn-delete-project" hidden>Excluir projeto</button>
+        <div class="modal__footer-right">
+          <button type="button" class="btn btn--ghost" id="btn-cancel-project">Cancelar</button>
+          <button type="button" class="btn btn--primary" id="btn-save-project">Salvar projeto</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <datalist id="db-providers">
+    <option value="Supabase"></option><option value="Firebase"></option><option value="Neon"></option>
+    <option value="PlanetScale"></option><option value="MongoDB Atlas"></option><option value="Turso"></option>
+    <option value="Railway"></option><option value="Render"></option><option value="AWS RDS"></option>
+    <option value="Azure SQL"></option><option value="SQL Server local"></option><option value="PostgreSQL local"></option>
+    <option value="MySQL local"></option><option value="SQLite (arquivo)"></option>
+  </datalist>
+  <datalist id="host-providers">
+    <option value="Netlify"></option><option value="Vercel"></option><option value="Cloudflare Pages"></option>
+    <option value="GitHub Pages"></option><option value="Railway"></option><option value="Render"></option>
+    <option value="Fly.io"></option><option value="Hostinger"></option><option value="Locaweb"></option>
+    <option value="AWS"></option><option value="Azure"></option><option value="Servidor próprio"></option>
+  </datalist>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <input type="file" id="restore-file-input" accept="application/json" hidden />
+
+  <div class="lock-overlay" id="lock-overlay" hidden>
+    <div class="lock-overlay__card">
+      <img src="img/logo.png" alt="" class="brand__mark" />
+      <p class="lock-overlay__title">Cofre bloqueado</p>
+      <p class="lock-overlay__hint">Digite sua senha mestra para continuar.</p>
+      <form id="unlock-form">
+        <label class="field">
+          <span class="field__label">Senha mestra</span>
+          <input type="password" id="unlock-password" required autocomplete="current-password" autofocus />
+        </label>
+        <p class="form-error" id="unlock-error" role="alert" hidden></p>
+        <button type="submit" class="btn btn--primary">Desbloquear</button>
+        <button type="button" class="btn btn--ghost" id="btn-unlock-logout">Sair</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="reauth-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="reauth-title">
+      <div class="modal__header"><h2 class="modal__title" id="reauth-title">Confirme sua senha mestra</h2></div>
+      <form id="reauth-form" class="modal__body">
+        <p class="panel__hint" id="reauth-reason"></p>
+        <label class="field">
+          <span class="field__label">Senha mestra</span>
+          <input type="password" id="reauth-password" required autocomplete="current-password" />
+        </label>
+        <p class="form-error" id="reauth-error" role="alert" hidden></p>
+        <div class="modal__footer"><div class="modal__footer-right">
+          <button type="button" class="btn btn--ghost" id="reauth-cancel">Cancelar</button>
+          <button type="submit" class="btn btn--primary">Confirmar</button>
+        </div></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="change-master-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="change-master-title">
+      <div class="modal__header">
+        <h2 class="modal__title" id="change-master-title">Alterar senha mestra</h2>
+        <button class="modal__close" id="change-master-close" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="change-master-form" class="modal__body">
+        <p class="panel__hint">Isso re-criptografa suas credenciais e projetos com a nova senha, de uma vez só (tudo ou nada). Os arquivos de projeto não precisam ser re-enviados.</p>
+        <label class="field"><span class="field__label">Senha mestra atual</span>
+          <input type="password" id="current-master-password" required autocomplete="current-password" /></label>
+        <label class="field"><span class="field__label">Nova senha mestra (mínimo 12 caracteres)</span>
+          <input type="password" id="new-master-password" required minlength="12" autocomplete="new-password" /></label>
+        <label class="field"><span class="field__label">Confirmar nova senha mestra</span>
+          <input type="password" id="new-master-password-confirm" required minlength="12" autocomplete="new-password" /></label>
+        <p class="form-error" id="change-master-error" role="alert" hidden></p>
+        <div class="modal__footer"><div class="modal__footer-right">
+          <button type="button" class="btn btn--ghost" id="btn-cancel-change-master">Cancelar</button>
+          <button type="submit" class="btn btn--primary" id="btn-save-change-master">Alterar senha</button>
+        </div></div>
+      </form>
+    </div>
+  </div>
+
+  <script src="vendor/supabase-js-2.119.0.umd.js" integrity="sha384-uteMfOloLDGt042uDz+xHGF3ym63/WQ6rFq7murQRG8Ih7QrXGEGNtWd8688sb4O" defer></script>
+  <script src="js/config.js" defer></script>
+  <script src="js/supabase-client.js" defer></script>
+  <script src="js/crypto.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/session.js" defer></script>
+  <script src="js/vault-data.js" defer></script>
+  <script src="js/clipboard.js" defer></script>
+  <script src="js/files.js" defer></script>
+  <script src="js/projects.js" defer></script>
+  <script src="js/backup.js" defer></script>
+  <script src="js/autolock.js" defer></script>
+  <script src="js/settings.js" defer></script>
+</body>
+</html>

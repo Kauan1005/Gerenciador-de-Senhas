@@ -1,200 +1,166 @@
-# Cofre — gerenciador de senhas
+# Cofre: gerenciador de senhas e de projetos
 
-Gerenciador de senhas 100% HTML/CSS/JS, com Supabase como backend e deploy estático no Netlify.
+HTML/CSS/JS puro (sem bundler no site), com **Supabase** como banco e login, e deploy estático no **Netlify**.
+Tudo o que é sensível é **cifrado no navegador** antes de sair: o servidor só guarda blobs ilegíveis.
+
+Duas seções:
+
+- **Senhas**: credenciais (site, usuário, senha, URL, notas), gerador de senhas, importar/exportar CSV e Excel, backup cifrado.
+- **Projetos**: guarda onde cada projeto está e como instalá-lo de novo. Cada projeto tem **Banco de dados** (onde os dados ficam), **Hospedagem** (onde foi publicado) e **Arquivos** instaláveis (cifrados). Veja a seção 7.
+
+> Relatório de segurança, com o que foi encontrado e corrigido: [`SECURITY.md`](SECURITY.md).
 
 ---
 
 ## 1. Arquitetura
 
 ```
-Navegador (HTML/CSS/JS puro, sem bundler)
+Navegador (HTML/CSS/JS puro)
    │
-   ├─ Web Crypto API   → PBKDF2 (derivação de chave) + AES-256-GCM (cifra)
-   │                      100% local. A senha mestra nunca é enviada.
+   ├─ Web Crypto API  → PBKDF2 (derivação) + AES-256-GCM (cifra). 100% local.
+   │                    A senha mestra NUNCA é enviada.
    │
-   └─ Supabase JS SDK (via CDN)
-        ├─ Auth       → login/sessão (e-mail + senha mestra)
-        └─ Postgres   → guarda só dados JÁ CIFRADOS + RLS por usuário
+   └─ Supabase (supabase-js servido pelo próprio site, versão fixa + SRI)
+        ├─ Auth      → login com um SEGREDO DERIVADO da senha mestra (não ela)
+        ├─ Postgres  → só blobs já cifrados + RLS (cada usuário só vê o que é seu)
+        └─ Storage   → bucket privado com arquivos já cifrados
 ```
-
-**Por que sem build/bundler?** Todo o código roda com `<script>` simples,
-sem webpack/vite/npm install. Isso evita qualquer atrito com antivírus
-corporativos (CrowdStrike, Kaspersky) — não há binários, não há
-`node_modules`, não há execução de scripts de instalação.
-
-**Por que a senha mestra também é a senha de login?** Para manter só
-1 senha para lembrar. O Supabase Auth nunca guarda essa senha em texto
-puro — só um hash bcrypt irreversível, que é o padrão de qualquer
-sistema de login. A chave de criptografia do cofre é derivada
-**localmente**, a partir da mesma senha mais um salt próprio que nunca
-sai do navegador em forma útil para decifrar nada sem a senha.
-
----
 
 ## 2. Como funciona a criptografia
 
-1. **Cadastro:** você escolhe uma senha mestra. O navegador gera um
-   `salt` aleatório e deriva uma chave AES-256 com PBKDF2 (250.000
-   iterações, SHA-256). Essa chave cifra um texto fixo conhecido
-   (`"COFRE_VERIFICADO_v1"`) e o resultado (`verifier`) vai para o
-   Supabase, junto com o `salt`. **A senha em si nunca é enviada.**
-2. **Login:** o navegador busca seu `salt`, deriva a chave de novo a
-   partir da senha que você digitou, e tenta decifrar o `verifier`.
-   Se bater com o texto esperado, a senha estava certa — e a chave
-   fica só na memória da aba.
-3. **Cada credencial** (site, usuário, senha, URL, notas) é cifrada
-   como um blob único (AES-256-GCM, IV aleatório por item) antes de
-   ir para o Supabase. O Postgres nunca vê texto puro.
-4. **Reload da página, fechar a aba, ou bloqueio automático** apagam
-   a chave da memória. É proposital — ninguém além de quem sabe a
-   senha mestra consegue ler o cofre.
+Da senha mestra saem **duas coisas independentes**, com sais diferentes:
 
----
+1. **Chave de cifra** (AES-256-GCM, não exportável) = PBKDF2-SHA256(senha, sal aleatório do cofre, 600.000 iterações).
+   Cifra credenciais e projetos. Fica só na memória da aba.
+2. **Segredo de login** = PBKDF2-SHA256(senha, sal derivado do e-mail, 600.000 iterações).
+   É isto (e não a senha) que vai ao Supabase Auth.
 
-## 3. Estrutura de arquivos
+Cada registro é um blob AES-GCM com IV aleatório. No formato **v2**, o blob carrega um **AAD** que o prende ao usuário, ao tipo
+e ao id da linha: copiar um blob para outra linha ou outro usuário faz a decifragem falhar. Registros antigos (v1, sem AAD) continuam
+abrindo e sobem para v2 quando editados.
+
+**Arquivos de projeto**: cada arquivo tem a própria chave (FEK), é cifrado em blocos de 1 MiB (AES-GCM, IV por bloco, AAD com a posição
+do bloco e "é o último?"): reordenar, repetir ou cortar blocos é detectado. A FEK, o nome, o tamanho e o SHA-256 ficam **dentro** do
+registro cifrado do projeto. Trocar a senha mestra re-cifra só os registros, nunca os arquivos.
+
+Reload da página, fechar a aba ou o bloqueio automático apagam a chave da memória. É proposital. Ao navegar entre Senhas e Projetos
+a chave (não exportável) passa pelo IndexedDB por no máximo 20 segundos e é apagada assim que a página seguinte a lê.
+
+## 3. Estrutura
 
 ```
-vault-app/
-├── index.html              tela de login / criar cofre
-├── vault.html               tela principal (cofre)
-├── css/
-│   ├── style.css            tokens visuais + tela de login
-│   └── vault.css             estilos da tela principal
-├── js/
-│   ├── config.js             URL e chave do Supabase (você edita)
-│   ├── supabase-client.js    inicialização do cliente Supabase
-│   ├── crypto.js              PBKDF2 + AES-GCM
-│   ├── auth.js                 cadastro / login
-│   ├── credentials.js           CRUD + busca + guarda de sessão
-│   ├── generator.js              gerador de senhas
-│   ├── clipboard.js               limpeza automática da área de transferência
-│   ├── import-export.js            importar/exportar Excel
-│   ├── backup.js                    backup/restauração em .json
-│   ├── autolock.js                   bloqueio automático por inatividade
-│   └── settings.js                    troca de senha mestra
-└── supabase/
-    └── schema.sql            script para rodar no Supabase
+index.html  vault.html  projects.html     telas: login, senhas, projetos
+css/                                      estilos (style, vault, projects)
+js/
+  config.js                  URL e chave PÚBLICA do Supabase (local; fora do git)
+  config.example.js          modelo do config.js
+  supabase-client.js         cliente (sessão só na aba por padrão)
+  crypto.js                  PBKDF2, AES-GCM com AAD, arquivos em blocos
+  auth.js                    cadastro e login v2 (+ migração de contas antigas)
+  session.js                 sessão, pedir senha mestra, passagem da chave entre páginas
+  vault-data.js              acesso às credenciais cifradas
+  credentials.js             tela de senhas
+  projects.js  files.js      tela de projetos e arquivos cifrados
+  import-export.js           CSV e Excel
+  backup.js  settings.js     backup/restauração e troca de senha mestra (atômica)
+  autolock.js  clipboard.js  generator.js  theme.js  ui-tabs.js
+vendor/                      bibliotecas locais (supabase-js 2.119.0, SheetJS 0.20.3) + SRI.txt
+supabase/schema.sql          banco: tabelas, RLS, rotate_vault(), bucket de arquivos
+scripts/build.mjs            monta dist/ (só o que vai para o ar)
+_headers  netlify.toml       cabeçalhos de segurança (CSP...) e build do Netlify
+tests/                       testes (criptografia e ponta a ponta)
 ```
 
----
+## 4. Rodar localmente
 
-## 4. Configurar o Supabase
+1. Copie `js/config.example.js` para `js/config.js` e preencha `SUPABASE_URL` e `SUPABASE_ANON_KEY`
+   (Supabase > Project Settings > API: use a chave **anon/publishable**, **nunca** a `service_role`/secret).
+2. Sirva a pasta por HTTP (o Web Crypto precisa de contexto seguro; `localhost` serve), por exemplo
+   `npx serve .` ou `python -m http.server 8080`, e abra `http://localhost:8080`.
 
-1. Crie um projeto gratuito em [supabase.com](https://supabase.com).
-2. Vá em **SQL Editor** → cole o conteúdo de `supabase/schema.sql` →
-   **Run**. Isso cria as tabelas `vault_config` e `vault_items`, com
-   RLS habilitado (cada usuário só enxerga as próprias linhas).
-3. Vá em **Authentication → Providers** e confirme que **Email** está
-   habilitado (é o único provider usado).
-4. (Opcional, recomendado para testes) Em **Authentication → Settings**,
-   desative "Confirm email" temporariamente para não depender de um
-   servidor de e-mail configurado. Reative em produção.
-5. Vá em **Project Settings → API** e copie:
-   - **Project URL**
-   - **anon public key**
-6. Cole os dois valores em `js/config.js`:
-   ```js
-   window.APP_CONFIG = {
-     SUPABASE_URL: "https://SEU-PROJETO.supabase.co",
-     SUPABASE_ANON_KEY: "sua-chave-anon-aqui",
-     ...
-   };
-   ```
+## 5. Banco de dados: rodar o `schema.sql` (uma vez)
 
-A chave `anon` é pública por definição — pode ficar exposta no
-front-end sem problema. **Nunca** use a `service_role key` aqui.
+Os recursos novos (Projetos, troca de senha atômica, formato v2) precisam de tabelas e funções que o `supabase/schema.sql` cria.
 
----
+1. Supabase > **SQL Editor** > **New query**.
+2. Cole o conteúdo inteiro de `supabase/schema.sql` e clique **Run**.
 
-## 5. Rodar localmente
+Ele é **idempotente e não apaga dados**: pode rodar sobre o banco que já tem credenciais e pode ser repetido. Além de criar o que falta,
+ele **redefine as regras de acesso (RLS)** das tabelas do cofre (removendo qualquer regra antiga mais frouxa) e cria o bucket privado
+`project-files` (50 MB por arquivo). Sem rodá-lo, o app **continua funcionando no formato antigo** e mostra um aviso.
 
-Como é tudo estático, não precisa de servidor Node nem build. Duas
-opções simples:
+Conferência (opcional, no SQL Editor): as três últimas linhas comentadas do arquivo listam tabelas, regras e o bucket.
 
-**Opção A — VS Code + extensão Live Server**
-Abra a pasta `vault-app` no VS Code, clique com o botão direito em
-`index.html` → "Open with Live Server".
-
-**Opção B — Python só para servir arquivos estáticos** (não roda
-lógica nenhuma do app, só serve os arquivos — funciona mesmo sem
-Python instalado, usando qualquer servidor estático equivalente):
-```bash
-cd vault-app
-python -m http.server 5500
-```
-Depois abra `http://localhost:5500` no navegador.
-
-> Abrir o `index.html` direto com duplo clique (`file://`) também
-> funciona na maior parte dos navegadores modernos, mas alguns
-> recursos (Clipboard API, `crypto.subtle`) podem exigir um contexto
-> `http://localhost` ou `https://`. Recomendo sempre servir por um
-> destes métodos.
-
----
+**Antes de rodar em um cofre com dados: crie um backup** (menu da conta > Criar backup). O arquivo continua cifrado.
 
 ## 6. Publicar no Netlify
 
-1. Crie uma conta em [netlify.com](https://netlify.com).
-2. **Add new site → Deploy manually** e arraste a pasta `vault-app`
-   inteira — ou conecte um repositório Git com essa pasta.
-3. Não há build command nem diretório de build — é um site 100%
-   estático. Se o Netlify pedir, deixe "Build command" vazio e
-   "Publish directory" como a raiz do projeto.
-4. Pronto — o link gerado (`https://seu-site.netlify.app`) já é o
-   cofre funcionando para qualquer pessoa que você compartilhar o
-   acesso.
+O site publica a pasta **`dist/`**, montada por `scripts/build.mjs`, e não a raiz do repositório. Assim o README, os scripts, o SQL e os
+testes nunca vão para o ar (o site antigo servia o `README.md` e o `config.example.js`).
 
-Como toda a lógica sensível roda no navegador de quem acessa, o
-Netlify só precisa servir arquivos estáticos — ele nunca vê senha
-nenhuma.
+**Com Git (recomendado):** Netlify > Site configuration:
+- Build command: `node scripts/build.mjs`  ·  Publish directory: `dist` (já estão no `netlify.toml`)
+- Environment variables: `SUPABASE_URL` e `SUPABASE_ANON_KEY` (a chave **pública**)
+- Opcional: `LEGACY_LOGIN=false` (veja a seção 10)
 
----
+O build **recusa** uma chave `service_role`/`sb_secret_` por engano e troca o host do Supabase dentro da CSP.
 
-## 7. Checklist de segurança
+**Arrastar e soltar:** crie o `js/config.js` local, rode `node scripts/build.mjs` e arraste a pasta `dist/` no Netlify.
 
-- [x] Senha mestra nunca é transmitida nem armazenada — só um hash
-      bcrypt de autenticação (Supabase Auth) e um ciphertext de
-      verificação (`verifier`), nenhum dos dois reversível para a senha.
-- [x] Chave de criptografia derivada com PBKDF2-SHA256, 250.000
-      iterações, salt aleatório de 16 bytes por usuário.
-- [x] Cada credencial cifrada individualmente com AES-256-GCM
-      (autenticado — qualquer adulteração do ciphertext quebra a
-      decifragem) e IV aleatório próprio.
-- [x] Chave de criptografia gerada como `extractable: false` — não
-      pode ser exportada em texto puro nem pelo próprio código.
-- [x] Row Level Security no Postgres: cada usuário só lê/escreve as
-      próprias linhas, reforçado no banco, não só no front-end.
-- [x] Bloqueio automático apaga a chave da memória de verdade
-      (não só esconde a tela) após inatividade.
-- [x] Área de transferência limpa automaticamente após copiar senha.
-- [x] Exportação para Excel exige confirmação explícita, avisando
-      que o arquivo gerado não é criptografado.
-- [x] Backup contém apenas dados já cifrados — pode ser guardado
-      em qualquer lugar sem expor as credenciais.
-- [x] Troca de senha mestra re-criptografa todas as credenciais e
-      atualiza a senha de login do Supabase Auth junto.
-- [ ] **Pendente de você:** ativar "Confirm email" em produção e
-      revisar os limites de rate-limit de autenticação do Supabase
-      para o seu caso de uso.
+Cabeçalhos aplicados (arquivo `_headers`): CSP restritiva (só JS/CSS do próprio site e conexão só com o seu Supabase), `X-Frame-Options: DENY`,
+`nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, COOP/CORP e HSTS.
 
-### Limitações conhecidas (leia antes de usar em produção)
-- A troca de senha mestra **não é atômica**: se a conexão cair no
-  meio da re-criptografia de muitas credenciais, alguns itens podem
-  ficar cifrados com a chave antiga e outros com a nova. Evite trocar
-  a senha mestra com conexão instável.
-- Não há recuperação de senha mestra esquecida — é o preço do
-  "zero-knowledge": nem o Supabase, nem quem programou isso, consegue
-  recuperar uma senha mestra perdida. Recomendo guardar em um lugar
-  seguro (papel, cofre físico, outro gerenciador) só como último recurso.
-- O app não impede múltiplas abas abertas simultaneamente com chaves
-  diferentes na memória — se você trocar a senha mestra em uma aba,
-  as outras abas abertas continuam com a chave antiga até recarregar.
+> **Importante:** a nova versão grava registros no formato v2. Depois de usar a nova versão, o site antigo não consegue ler o que foi
+> salvo ou editado por ela. Troque o site inteiro de uma vez.
 
----
+## 7. Projetos
 
-## 8. Próximos passos possíveis (fora do escopo atual)
-- Versão desktop "de verdade" empacotando com Electron (ícone,
-  atalho, sem precisar do navegador aberto).
-- 2FA no login via Supabase Auth (TOTP).
-- Campos customizados por credencial (hoje é um conjunto fixo:
-  site, usuário, senha, URL, notas).
+Menu **Projetos**. Cada projeto tem quatro abas:
+
+- **Geral**: nome, descrição, repositório, etiquetas, notas.
+- **Banco de dados** (uma ou mais entradas): provedor (Supabase, Firebase, Neon…), nome no provedor, identificador, endereço, painel,
+  conta, região, notas, e **senhas do cofre ligadas** (guardadas só como ids; o conteúdo continua no cofre, com atalho para copiar).
+- **Hospedagem** (uma ou mais): provedor (Netlify, Vercel…), nome do site, endereço público, painel, domínio, como publica, conta, notas, senhas ligadas.
+- **Arquivos**: instaladores, `.zip`, `.apk`… cifrados no navegador antes de subir; versão e observações de instalação por arquivo;
+  "Baixar" decifra e confere o SHA-256 (arquivo adulterado no servidor é recusado). Limite de 50 MB por arquivo; o plano gratuito do
+  Supabase tem ~1 GB no total (o app mostra o uso).
+
+A lista pode ser organizada **por projeto**, **por banco de dados** ou **por hospedagem** (um grupo por provedor). A busca olha nome,
+descrição, provedores, endereços, contas e nomes de arquivo, sempre localmente.
+
+## 8. Segurança, em resumo
+
+- A senha mestra nunca sai do navegador (login com segredo derivado), e não é recuperável: perdeu, perdeu os dados.
+- Servidor sem texto puro: credenciais, projetos e arquivos são blobs AES-256-GCM.
+- RLS em todas as tabelas e no Storage: cada usuário só alcança o que é seu.
+- Sem JavaScript de terceiros; CSP; SRI; sem scripts inline; conteúdo do cofre sempre desenhado como texto.
+- Bloqueio por inatividade (5 min), cópia com limpeza automática da área de transferência, gerador com `crypto.getRandomValues`.
+- Exportar em texto puro exige reconfirmar a senha mestra; CSV/Excel protegidos contra injeção de fórmula.
+- Troca de senha mestra em uma única transação (tudo ou nada).
+
+Detalhes e riscos restantes em [`SECURITY.md`](SECURITY.md).
+
+## 9. Testes
+
+```
+cd tests
+npm install        # só desenvolvimento (playwright-core); o site não usa npm
+npm test           # criptografia (Node) + ponta a ponta (navegador)
+```
+
+Os testes ponta a ponta usam um **Supabase simulado** (`tests/fake-supabase.js`): não tocam no banco real. Servem o site com os
+mesmos cabeçalhos do Netlify e conferem, entre outras coisas, que a senha mestra não chega ao servidor, que nada fica em texto
+puro, que a CSP bloqueia script injetado, que arquivos adulterados são recusados e que contas antigas continuam abrindo.
+Precisam do Edge ou do Chrome instalados (ou `PW_BROWSER=caminho`).
+
+## 10. Contas antigas (migração do login)
+
+Contas criadas antes desta versão tinham a **própria senha mestra** como senha do Supabase. Com `LEGACY_LOGIN: true` (padrão), o login
+tenta o método novo e, se falhar, o antigo; ao entrar pelo antigo, a conta é **migrada na hora** (a senha do Supabase passa a ser o
+segredo derivado) e o app avisa. Os dados não são tocados nessa migração.
+
+Quando **todas** as contas tiverem entrado uma vez com a versão nova, ponha `LEGACY_LOGIN: false` (variável `LEGACY_LOGIN=false` no
+Netlify). Aí uma senha errada deixa de ser enviada ao servidor numa segunda tentativa.
+
+Cofres criados com menos de 600.000 iterações mostram o aviso **"Reforçar criptografia"** no menu da conta (re-deriva a chave com o
+custo atual, com backup automático antes).

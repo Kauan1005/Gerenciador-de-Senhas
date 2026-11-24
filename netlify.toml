@@ -1,0 +1,9 @@
+# Netlify: monta dist/ com scripts/build.mjs e publica só ele.
+# Variáveis (Site configuration > Environment variables): SUPABASE_URL e SUPABASE_ANON_KEY (chave PÚBLICA).
+# Opcional: LEGACY_LOGIN=false depois que todas as contas migrarem para o login novo.
+[build]
+  command = "node scripts/build.mjs"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"

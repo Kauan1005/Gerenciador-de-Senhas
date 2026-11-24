@@ -1,166 +1,21 @@
 /* ==========================================================
-   CREDENTIALS MODULE
+   CREDENTIALS MODULE (tela vault.html)
    ==========================================================
-   Controla a tela vault.html inteira: busca a lista cifrada
-   no Supabase, decifra em memória, renderiza, e implementa
-   criar/editar/excluir. Também cuida do "guarda de sessão":
-   se a chave não estiver em memória (reload, aba nova, link
-   direto), mas ainda existir uma sessão válida no Supabase,
-   pede a senha mestra novamente (overlay de bloqueio) para
-   re-derivar a chave, sem exigir novo login. Se não houver
-   sessão nenhuma, manda de volta para o login.
+   Só a interface: lista, busca, modal e ações. O acesso aos dados
+   (buscar/gravar cifrado) está em vault-data.js; a guarda de sessão
+   (pedir senha mestra) está em session.js.
    ========================================================== */
-
-let allCredentials = []; // cache em memória, já decifrada
-
-function toast(message) {
-  const el = document.getElementById("toast");
-  if (!el) return;
-  el.textContent = message;
-  el.hidden = false;
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => { el.hidden = true; }, 2500);
-}
-
-async function guardSession() {
-  // Já tem chave em memória (ex.: navegação dentro da mesma aba)
-  if (window.VaultSession && VaultSession.key && VaultSession.userId) {
-    return true;
-  }
-
-  // Sem chave em memória: verifica se ainda existe sessão válida no Supabase
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) {
-    window.location.href = "index.html";
-    return false;
-  }
-
-  // Sessão existe, mas a chave derivada se perdeu (reload / navegação) -> pede senha mestra
-  VaultSession.userId = session.user.id;
-  VaultSession.email = session.user.email;
-  return await promptUnlock();
-}
-
-function promptUnlock() {
-  return new Promise((resolve) => {
-    const overlay = document.getElementById("lock-overlay");
-    const form = document.getElementById("unlock-form");
-    const input = document.getElementById("unlock-password");
-    const errorEl = document.getElementById("unlock-error");
-    const logoutBtn = document.getElementById("btn-unlock-logout");
-
-    errorEl.hidden = true;
-    overlay.hidden = false;
-    input.value = "";
-    input.focus();
-
-    async function onSubmit(e) {
-      e.preventDefault();
-      errorEl.hidden = true;
-      try {
-        const config = await AuthModule.fetchVaultConfig(VaultSession.userId);
-        if (!config) {
-          errorEl.textContent = "Configuração do cofre não encontrada.";
-          errorEl.hidden = false;
-          return;
-        }
-        const key = await AuthModule.unlockWithConfig(input.value, config);
-        if (!key) {
-          errorEl.textContent = "Senha mestra incorreta.";
-          errorEl.hidden = false;
-          return;
-        }
-        VaultSession.key = key;
-        cleanup();
-        overlay.hidden = true;
-        resolve(true);
-      } catch (err) {
-        console.error(err);
-        errorEl.textContent = "Erro ao desbloquear. Tente novamente.";
-        errorEl.hidden = false;
-      }
-    }
-
-    function onLogout() {
-      cleanup();
-      sb.auth.signOut().finally(() => {
-        VaultSession.clear();
-        window.location.href = "index.html";
-      });
-      resolve(false);
-    }
-
-    function cleanup() {
-      form.removeEventListener("submit", onSubmit);
-      logoutBtn.removeEventListener("click", onLogout);
-    }
-
-    form.addEventListener("submit", onSubmit);
-    logoutBtn.addEventListener("click", onLogout);
-  });
-}
-
-/* ---------- CRUD ---------- */
-
-async function fetchAndDecryptAll() {
-  const { data, error } = await sb
-    .from("vault_items")
-    .select("id, encrypted_data, iv, created_at")
-    .eq("user_id", VaultSession.userId)
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-
-  const decrypted = [];
-  for (const row of data) {
-    try {
-      const item = await CryptoUtil.decryptJSON(VaultSession.key, row.encrypted_data, row.iv);
-      decrypted.push({ id: row.id, ...item });
-    } catch (err) {
-      // linha corrompida ou cifrada com outra chave — não trava a lista inteira
-      console.error("Falha ao decifrar item", row.id, err);
-    }
-  }
-  return decrypted;
-}
-
-async function addCredential(payload) {
-  const { ciphertext, iv } = await CryptoUtil.encryptJSON(VaultSession.key, payload);
-  const { data, error } = await sb
-    .from("vault_items")
-    .insert({ user_id: VaultSession.userId, encrypted_data: ciphertext, iv })
-    .select("id, created_at")
-    .single();
-  if (error) throw error;
-  return { id: data.id, ...payload };
-}
-
-async function updateCredential(id, payload) {
-  const { ciphertext, iv } = await CryptoUtil.encryptJSON(VaultSession.key, payload);
-  const { error } = await sb
-    .from("vault_items")
-    .update({ encrypted_data: ciphertext, iv })
-    .eq("id", id)
-    .eq("user_id", VaultSession.userId);
-  if (error) throw error;
-  return { id, ...payload };
-}
-
-async function deleteCredential(id) {
-  const { error } = await sb
-    .from("vault_items")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", VaultSession.userId);
-  if (error) throw error;
-}
 
 /* ---------- render ---------- */
 
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str ?? "";
-  return div.innerHTML;
+function iconButton(action, label, glyph) {
+  const b = el("button", "icon-btn");
+  b.type = "button";
+  b.dataset.action = action;
+  b.title = label;
+  b.setAttribute("aria-label", label);
+  b.innerHTML = glyph; // glifo constante (entidade HTML), nunca dado do usuário
+  return b;
 }
 
 function renderList(items) {
@@ -168,7 +23,7 @@ function renderList(items) {
   const emptyState = document.getElementById("empty-state");
   const noResults = document.getElementById("no-results");
 
-  list.innerHTML = "";
+  list.replaceChildren();
 
   if (allCredentials.length === 0) {
     emptyState.hidden = false;
@@ -184,32 +39,26 @@ function renderList(items) {
   noResults.hidden = true;
 
   for (const item of items) {
-    const card = document.createElement("article");
-    card.className = "cred-card";
+    const card = el("article", "cred-card");
     card.dataset.id = item.id;
 
-    card.innerHTML = `
-      <div class="cred-card__main">
-        <h3 class="cred-card__title">${escapeHtml(item.title)}</h3>
-        <p class="cred-card__username">${escapeHtml(item.username)}</p>
-      </div>
-      <div class="cred-card__actions">
-        ${item.url ? `<button class="icon-btn" data-action="open-url" title="Abrir URL e copiar login e senha" aria-label="Abrir URL e copiar login e senha">&#128279;</button>` : ""}
-        <button class="icon-btn" data-action="edit" title="Editar credencial" aria-label="Editar credencial">&#9998;</button>
-        <button class="icon-btn" data-action="delete" title="Excluir credencial" aria-label="Excluir credencial">&#128465;</button>
-      </div>
-    `;
+    const main = el("div", "cred-card__main");
+    main.append(el("h3", "cred-card__title", item.title), el("p", "cred-card__username", item.username));
 
-    card.querySelector('[data-action="open-url"]')?.addEventListener("click", () => {
-      openCredentialUrl(item);
-    });
-    card.querySelector('[data-action="edit"]').addEventListener("click", () => {
-      openModal(item);
-    });
-    card.querySelector('[data-action="delete"]').addEventListener("click", () => {
-      confirmDelete(item);
-    });
+    const actions = el("div", "cred-card__actions");
+    const copyUser = iconButton("copy-user", "Copiar usuário", "&#128100;");
+    const copyPass = iconButton("copy-pass", "Copiar senha", "&#128273;");
+    actions.append(copyUser, copyPass);
+    if (safeHttpUrl(item.url)) actions.append(iconButton("open-url", "Abrir o site e copiar login e senha", "&#128279;"));
+    actions.append(iconButton("edit", "Editar credencial", "&#9998;"), iconButton("delete", "Excluir credencial", "&#128465;"));
 
+    copyUser.addEventListener("click", () => copySecret(item.username, "Usuário copiado"));
+    copyPass.addEventListener("click", () => copySecret(item.password, "Senha copiada"));
+    actions.querySelector('[data-action="open-url"]')?.addEventListener("click", () => openCredentialUrl(item));
+    actions.querySelector('[data-action="edit"]').addEventListener("click", () => openModal(item));
+    actions.querySelector('[data-action="delete"]').addEventListener("click", () => confirmDelete(item));
+
+    card.append(main, actions);
     list.appendChild(card);
   }
 }
@@ -220,12 +69,11 @@ function applyFilter() {
     renderList(allCredentials);
     return;
   }
-  const filtered = allCredentials.filter((item) =>
-    [item.title, item.username, item.url]
-      .filter(Boolean)
-      .some((field) => field.toLowerCase().includes(term))
+  renderList(
+    allCredentials.filter((item) =>
+      [item.title, item.username, item.url].filter(Boolean).some((field) => field.toLowerCase().includes(term))
+    )
   );
-  renderList(filtered);
 }
 
 async function refreshList() {
@@ -235,31 +83,17 @@ async function refreshList() {
 
 /* ---------- ações auxiliares ---------- */
 
-// Abre a URL cadastrada em nova aba e, junto, copia login e senha para a
-// área de transferência (com o separador " e " entre eles), já que não há
-// como preencher automaticamente os campos de um site de terceiros a
-// partir daqui — só uma extensão de navegador com permissão de autofill
-// faria isso.
+// Abre a URL cadastrada em nova aba e copia login e senha (separados por " e ").
+// Não há como preencher campos de um site de terceiros daqui: só uma extensão faria isso.
 function openCredentialUrl(item) {
-  if (!item || !item.url) return;
-  const href = /^https?:\/\//i.test(item.url) ? item.url : `https://${item.url}`;
+  const href = safeHttpUrl(item && item.url);
+  if (!href) return;
   window.open(href, "_blank", "noopener,noreferrer");
-
-  const seconds = (window.APP_CONFIG && window.APP_CONFIG.CLIPBOARD_CLEAR_SECONDS) || 20;
-  const combined = `${item.username} e ${item.password}`;
-  ClipboardModule.copy(combined).then((ok) => {
-    toast(
-      ok
-        ? `Site aberto. Login e senha copiados (Ctrl+V) — limpos em ${seconds}s.`
-        : "Site aberto. Não foi possível copiar login/senha."
-    );
-  });
+  copySecret(`${item.username} e ${item.password}`, "Site aberto. Login e senha copiados (Ctrl+V)");
 }
 
 function confirmDelete(item) {
-  if (!window.confirm(`Excluir a credencial "${item.title}"? Essa ação não pode ser desfeita.`)) {
-    return;
-  }
+  if (!window.confirm(`Excluir a credencial "${item.title}"? Essa ação não pode ser desfeita.`)) return;
   deleteCredential(item.id)
     .then(() => {
       toast("Credencial excluída.");
@@ -307,6 +141,7 @@ function openModal(item) {
 
 function closeModal() {
   document.getElementById("credential-modal").hidden = true;
+  document.getElementById("credential-form").reset(); // não deixa a senha digitada no formulário
 }
 
 async function handleCredentialSubmit(e) {
@@ -344,6 +179,29 @@ async function handleCredentialSubmit(e) {
   }
 }
 
+/* ---------- avisos de atualização do banco / da criptografia ---------- */
+
+function showUpgradeBanner() {
+  const banner = document.getElementById("upgrade-banner");
+  if (!banner) return;
+  const messages = [];
+  if (!VaultSchema.projects || !VaultSchema.itemVersion || !VaultSchema.rotateRpc) {
+    messages.push("O banco ainda não tem as atualizações de segurança e de projetos. Rode o arquivo supabase/schema.sql no Supabase (README, seção 5).");
+  }
+  if (AuthModule.needsKdfUpgrade(VaultSession.config)) {
+    messages.push("Seu cofre usa uma derivação de chave mais fraca que a atual. Use \"Reforçar criptografia\" no menu da conta.");
+    document.getElementById("btn-upgrade-kdf")?.removeAttribute("hidden");
+  }
+  if (messages.length) {
+    banner.textContent = messages.join(" ");
+    banner.hidden = false;
+  }
+  if (sessionStorage.getItem("cofre-migrated") === "1") {
+    sessionStorage.removeItem("cofre-migrated");
+    toast("Login atualizado: sua senha mestra agora não é mais enviada ao servidor.");
+  }
+}
+
 /* ---------- inicialização ---------- */
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -351,6 +209,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (!ok) return;
 
   document.getElementById("account-email").textContent = VaultSession.email || "";
+  AutoLockModule.init(); // só agora a chave existe
+  await detectSchema();
+  showUpgradeBanner();
 
   refreshList().catch((err) => {
     console.error(err);
@@ -398,9 +259,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.location.href = "index.html";
   });
 
-  // Gerador de senha, cópia com limpeza automática, importar/exportar Excel,
-  // backup/restauração, bloqueio automático e troca de senha mestra são
-  // ligados pelos respectivos módulos (generator.js, clipboard.js,
-  // import-export.js, backup.js, autolock.js, settings.js), carregados
-  // depois deste arquivo em vault.html.
+  // Gerador de senha, cópia com limpeza automática, importar/exportar, backup,
+  // bloqueio automático e troca de senha mestra são ligados pelos demais módulos.
 });

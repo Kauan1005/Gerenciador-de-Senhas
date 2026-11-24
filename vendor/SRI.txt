@@ -1,0 +1,2 @@
+vendor/supabase-js-2.119.0.umd.js sha384-uteMfOloLDGt042uDz+xHGF3ym63/WQ6rFq7murQRG8Ih7QrXGEGNtWd8688sb4O
+vendor/xlsx-0.20.3.full.min.js sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT

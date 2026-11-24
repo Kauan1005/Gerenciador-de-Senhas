@@ -2,45 +2,37 @@
    AUTO-LOCK MODULE
    ==========================================================
    "Bloquear" aqui significa de verdade apagar a chave AES da
-   memória (VaultSession.key = null) e limpar a lista de
-   credenciais já decifrada — não é só cobrir a tela com um
-   overlay. Sem a chave, nada pode ser lido, mesmo inspecionando
-   a página. A sessão do Supabase Auth continua válida, então
-   desbloquear pede só a senha mestra, não e-mail de novo.
+   memória (VaultSession.key = null) e avisar as páginas
+   (evento "vault:locked") para limparem o que já estava decifrado.
+   Não é só cobrir a tela com um overlay: sem a chave, nada pode
+   ser lido, mesmo inspecionando a página. A sessão do Supabase
+   continua válida, então desbloquear pede só a senha mestra.
+
+   IMPORTANTE: init() precisa ser chamado DEPOIS de guardSession()
+   (a chave só existe depois dela). Na versão anterior o init era
+   tentado cedo demais e o bloqueio por inatividade nunca chegava
+   a ser ligado.
    ========================================================== */
 
 const AutoLockModule = (() => {
   let timer = null;
-  const minutes = (window.APP_CONFIG && window.APP_CONFIG.AUTO_LOCK_MINUTES) || 5;
+  let started = false;
+  const minutes = () => (window.APP_CONFIG && window.APP_CONFIG.AUTO_LOCK_MINUTES) || 5;
 
   function resetTimer() {
     if (!window.VaultSession || !VaultSession.key) return; // já bloqueado
     clearTimeout(timer);
-    timer = setTimeout(lock, minutes * 60 * 1000);
+    timer = setTimeout(lock, minutes() * 60 * 1000);
   }
 
   function lock() {
     if (!window.VaultSession || !VaultSession.key) return; // já bloqueado
     VaultSession.key = null;
-
-    if (typeof allCredentials !== "undefined") {
-      allCredentials = [];
-    }
-    const list = document.getElementById("credentials-list");
-    if (list) list.innerHTML = "";
-
-    showOverlay();
-  }
-
-  function showOverlay() {
+    clearTimeout(timer);
+    document.dispatchEvent(new CustomEvent("vault:locked"));
     const overlay = document.getElementById("lock-overlay");
     if (overlay) overlay.hidden = false;
-    clearTimeout(timer);
-  }
-
-  function hideOverlay() {
-    const overlay = document.getElementById("lock-overlay");
-    if (overlay) overlay.hidden = true;
+    document.getElementById("unlock-password")?.focus();
   }
 
   async function unlock(password) {
@@ -58,9 +50,10 @@ const AutoLockModule = (() => {
       }
 
       VaultSession.key = key;
-      hideOverlay();
+      VaultSession.config = config;
+      document.getElementById("lock-overlay").hidden = true;
       resetTimer();
-      await refreshList();
+      document.dispatchEvent(new CustomEvent("vault:unlocked"));
     } catch (err) {
       console.error(err);
       errorEl.textContent = "Erro ao desbloquear. Tente novamente.";
@@ -69,8 +62,17 @@ const AutoLockModule = (() => {
   }
 
   function init() {
+    if (started) return;
+    started = true;
+
     ["mousemove", "keydown", "click", "scroll", "touchstart"].forEach((evt) => {
       document.addEventListener(evt, resetTimer, { passive: true });
+    });
+    // aba escondida por muito tempo também bloqueia ao voltar
+    let hiddenAt = 0;
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") hiddenAt = Date.now();
+      else if (hiddenAt && Date.now() - hiddenAt > minutes() * 60 * 1000) lock();
     });
     resetTimer();
 
@@ -98,7 +100,11 @@ const AutoLockModule = (() => {
 })();
 window.AutoLockModule = AutoLockModule;
 
-document.addEventListener("DOMContentLoaded", () => {
-  if (!window.VaultSession || !VaultSession.key) return; // guardSession já deve redirecionar
-  AutoLockModule.init();
+// A lista de credenciais decifradas some da memória e da tela quando o cofre bloqueia.
+document.addEventListener("vault:locked", () => {
+  if (typeof allCredentials !== "undefined") allCredentials = [];
+  document.getElementById("credentials-list")?.replaceChildren();
+});
+document.addEventListener("vault:unlocked", () => {
+  if (typeof refreshList === "function") refreshList().catch(console.error);
 });
