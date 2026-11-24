@@ -20,11 +20,11 @@ const IMPORT_MAX_ROWS = 5000;
 const FIELD_MAX = { title: 200, username: 300, password: 1000, url: 500, notes: 5000 };
 
 const FIELD_ALIASES = {
-  title: ["site", "titulo", "nome", "servico", "title", "name"],
-  username: ["usuario", "username", "user", "email", "e-mail", "login"],
+  title: ["site", "titulo", "nome", "servico", "title", "name", "nome do site", "nome do site / servico", "nome do site/servico", "nome do servico"],
+  username: ["usuario", "username", "user", "email", "e-mail", "login", "usuario / e-mail", "usuario/e-mail", "usuario / email", "usuario/email", "usuario e-mail"],
   password: ["senha", "password", "pass"],
   url: ["url", "link", "endereco", "site url", "login_uri", "website"],
-  notes: ["notas", "nota", "observacoes", "notes", "note"]
+  notes: ["notas", "nota", "observacoes", "notes", "note", "notas (opcional)"]
 };
 
 function normalizeHeader(h) {
@@ -106,31 +106,33 @@ function download(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// Planilha de exemplo (só dados fictícios) para a pessoa preencher e importar. A primeira aba é a que o importador lê.
+// Planilha de exemplo (só dados fictícios) com os mesmos campos do formulário da Arca. A primeira aba é a que o importador lê.
+const EXAMPLE_HEADERS = ["Nome do site / serviço", "Usuário / e-mail", "Senha", "URL", "Notas (opcional)"];
+
 function downloadImportExample() {
   const rows = [
-    { Site: "Exemplo: Gmail", "Usuário": "seu.email@exemplo.com", Senha: "troque-esta-senha", URL: "https://mail.google.com", Notas: "apague estas linhas de exemplo antes de importar" },
-    { Site: "Exemplo: Banco", "Usuário": "12345-6", Senha: "outra-senha-de-exemplo", URL: "https://www.seubanco.com.br", Notas: "" },
-    { Site: "Exemplo: Streaming", "Usuário": "voce@exemplo.com", Senha: "senha-exemplo-3", URL: "https://www.seustreaming.com.br", Notas: "plano família" }
+    ["Gmail", "seu.email@exemplo.com", "troque-esta-senha-1", "https://mail.google.com", "exemplo: apague as 3 linhas antes de importar"],
+    ["Netflix", "voce@exemplo.com", "troque-esta-senha-2", "https://www.netflix.com", ""],
+    ["Sistema interno", "seu.usuario", "troque-esta-senha-3", "https://sistema.exemplo.com", ""]
   ];
   const help = [
     ["Como importar na Arca"],
     [""],
-    ["1. Preencha a aba \"Senhas\": uma linha por login. Mantenha a primeira linha (os nomes das colunas)."],
+    ["1. Preencha a aba \"Senhas\": uma linha por login. Mantenha a primeira linha (os nomes dos campos)."],
     ["2. Apague as três linhas de exemplo."],
     ["3. Salve como .xlsx (ou .csv) e, na Arca, use o menu da conta > Importar CSV / Excel."],
     [""],
-    ["Colunas: Site (obrigatória), Usuário, Senha (obrigatória), URL, Notas."],
-    ["Também são aceitos: Título/Nome/Serviço no lugar de Site; E-mail/Login no lugar de Usuário; Link/Website no lugar de URL; Observações no lugar de Notas."],
+    ["Campos (iguais aos do formulário \"Nova credencial\"): Nome do site / serviço (obrigatório), Usuário / e-mail, Senha (obrigatória), URL e Notas (opcional)."],
+    ["Também são aceitos nomes mais curtos: Site, Nome, Usuário, E-mail, Login, Link, Notas."],
     ["Limites: 5.000 linhas e 5 MB por arquivo. Só a primeira aba é lida."],
     [""],
     ["IMPORTANTE: esta planilha guarda senhas em texto puro. Depois de importar, apague o arquivo e esvazie a Lixeira."]
   ];
   const workbook = XLSX.utils.book_new();
-  const sheet = XLSX.utils.json_to_sheet(rows, { header: ["Site", "Usuário", "Senha", "URL", "Notas"] });
-  sheet["!cols"] = [{ wch: 26 }, { wch: 28 }, { wch: 26 }, { wch: 34 }, { wch: 44 }];
+  const sheet = XLSX.utils.aoa_to_sheet([EXAMPLE_HEADERS, ...rows]);
+  sheet["!cols"] = [{ wch: 26 }, { wch: 28 }, { wch: 24 }, { wch: 34 }, { wch: 46 }];
   const helpSheet = XLSX.utils.aoa_to_sheet(help);
-  helpSheet["!cols"] = [{ wch: 110 }];
+  helpSheet["!cols"] = [{ wch: 120 }];
   XLSX.utils.book_append_sheet(workbook, sheet, "Senhas");
   XLSX.utils.book_append_sheet(workbook, helpSheet, "Como usar");
   XLSX.writeFile(workbook, "arca-exemplo-importacao.xlsx");

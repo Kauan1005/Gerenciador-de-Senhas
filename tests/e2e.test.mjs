@@ -519,11 +519,12 @@ try {
     const info = await page.evaluate(async (b64) => {
       const wb = XLSX.read(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)), { type: "array" });
       const first = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
-      return { sheets: wb.SheetNames, cols: Object.keys(first[0] || {}), n: first.length };
+      return { sheets: wb.SheetNames, cols: Object.keys(first[0] || {}), n: first.length, first: first[0] && first[0]["Nome do site / serviço"], names: first.map((r) => r["Nome do site / serviço"]) };
     }, readFileSync(exPath).toString("base64"));
-    ok(info.sheets[0] === "Senhas" && info.sheets.includes("Como usar") && info.cols.join(",") === "Site,Usuário,Senha,URL,Notas" && info.n === 3, "o exemplo tem a aba Senhas (com as 5 colunas e 3 linhas de exemplo) e a aba Como usar");
+    ok(info.sheets[0] === "Senhas" && info.sheets.includes("Como usar") && info.cols.join(",") === "Nome do site / serviço,Usuário / e-mail,Senha,URL,Notas (opcional)" && info.n === 3 && info.first === "Gmail" && info.names.join(",") === "Gmail,Netflix,Sistema interno", "o exemplo tem a aba Senhas com os campos do formulário e 3 linhas (Gmail, Netflix, Sistema interno) e a aba Como usar");
     await page.setInputFiles("#import-file-input", { name: "arca-exemplo-importacao.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: readFileSync(exPath) });
     ok(await until(async () => (await toast(page)).includes("3 adicionada")), "e o próprio exemplo é aceito pelo importador (ida e volta)");
+    ok((await cards(page)).sort().join(",") === "Gmail,Netflix,Sistema interno", "as 3 credenciais entram com o nome, o usuário e a URL certos");
     await ctx.close();
   }
 
