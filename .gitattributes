@@ -1,0 +1,3 @@
+# Bibliotecas de terceiros: nunca converter quebras de linha (mudaria os bytes e quebraria o SRI)
+vendor/* -text
+*.png -text
