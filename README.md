@@ -213,3 +213,11 @@ O cofre usa uma chave aleatória (DEK) que cifra tudo. Ela fica guardada **embru
 
 **Perdeu a chave de recuperação?** Se você ainda sabe a senha mestra, entre no cofre e use, no menu da conta, **Gerar nova chave de recuperação**
 (pede a senha mestra). A chave antiga deixa de valer, e nada é re-cifrado. Se perder a senha mestra **e** a chave de recuperação, não há como abrir o cofre.
+
+## 13. Design
+
+Tema escuro por padrão (claro opcional no menu da conta), com a regra 60-30-10: 60% fundo quase preto (`--bg`), 30% superfícies e bordas grafite
+(`--surface`, `--surface-2`, `--border`) e 10% de acento âmbar (`--accent`: só botão principal, foco, item ativo e a marca). Cores de estado
+(sucesso, alerta, perigo) são separadas do acento. Todos os tokens ficam no topo de `css/style.css`; trocar a cor da marca é mudar `--accent`
+(e o SVG em `img/logo.svg`). As fontes são as do sistema, porque a CSP não permite fontes de terceiros. Para ver as telas sem Supabase:
+`cd tests && node shots.mjs` (grava capturas em `tests/shots/`).

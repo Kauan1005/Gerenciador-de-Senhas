@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const strengthBar = document.getElementById("strength-bar");
   const strengthLabel = document.getElementById("strength-label");
   const labels = ["Muito fraca", "Fraca", "Razoável", "Boa", "Forte", "Muito forte"];
-  const colors = ["#c06a5f", "#c06a5f", "#c9975f", "#c9975f", "#6b9c7d", "#6b9c7d"];
+  const colors = ["var(--danger)", "var(--danger)", "var(--warn)", "var(--warn)", "var(--success)", "var(--success)"];
 
   if (signupPassword && strengthBar && strengthLabel) {
     signupPassword.addEventListener("input", () => {

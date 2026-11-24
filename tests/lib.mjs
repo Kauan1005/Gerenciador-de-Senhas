@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const FAKE_HOST = "fake.supabase.test";
 
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".png": "image/png", ".json": "application/json", ".txt": "text/plain" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".png": "image/png", ".svg": "image/svg+xml", ".json": "application/json", ".txt": "text/plain" };
 const PUBLIC = [/^\/(index|vault|projects|google-callback|privacidade|recovery)\.html$/, /^\/css\//, /^\/img\//, /^\/vendor\//, /^\/js\/(?!config)/];
 
 // Lê o primeiro bloco ("/*") do _headers, trocando o host do Supabase.

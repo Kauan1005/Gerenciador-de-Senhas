@@ -11,14 +11,15 @@
   <link rel="stylesheet" href="css/modal.css" />
   <script src="js/theme.js"></script>
 </head>
-<body>
-  <main class="screen">
-    <header class="brand">
-      <img src="img/logo.svg" alt="" class="brand__mark" />
-      <span class="brand__name">Arca</span>
-    </header>
-
-    <section class="card" role="region" aria-label="Recuperar cofre">
+<body class="auth-body">
+  <div class="auth auth--single">
+    <main class="auth__main">
+      <div class="auth__panel" role="region" aria-label="Recuperar cofre">
+        <div class="brand">
+          <img src="img/logo.svg" alt="" class="brand__mark" />
+          <span class="brand__name">Arca</span>
+        </div>
+        <h1 class="panel__title">Recuperar o cofre</h1>
       <p class="panel__hint" id="recovery-no-session" hidden>
         Este link de recuperação é inválido ou expirou. Volte para a tela de login e
         clique em "Esqueci minha senha mestra" para receber um novo link.
@@ -50,10 +51,9 @@
         <button type="submit" class="btn btn--primary" id="recovery-submit">Recuperar cofre</button>
         <a class="btn btn--ghost btn--small" href="index.html">Voltar ao login</a>
       </form>
-    </section>
-
-    <p class="footnote">Criptografia AES-256 local &middot; nada é enviado sem antes ser cifrado</p>
-  </main>
+      </div>
+    </main>
+  </div>
 
   <script src="vendor/supabase-js-2.119.0.umd.js" integrity="sha384-uteMfOloLDGt042uDz+xHGF3ym63/WQ6rFq7murQRG8Ih7QrXGEGNtWd8688sb4O" defer></script>
   <script src="js/config.js" defer></script>

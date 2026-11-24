@@ -8,13 +8,15 @@
 
 /* ---------- render ---------- */
 
-function iconButton(action, label, glyph) {
-  const b = el("button", "icon-btn");
+// text: rótulo visível ao lado do ícone (botões principais); sem text, só o ícone.
+function iconButton(action, label, icon, text) {
+  const b = el("button", "icon-btn" + (text ? " icon-btn--text" : ""));
   b.type = "button";
   b.dataset.action = action;
   b.title = label;
   b.setAttribute("aria-label", label);
-  b.innerHTML = glyph; // glifo constante (entidade HTML), nunca dado do usuário
+  b.innerHTML = icon; // SVG constante do app (ICONS), nunca dado do usuário
+  if (text) b.append(el("span", "", text));
   return b;
 }
 
@@ -43,14 +45,17 @@ function renderList(items) {
     card.dataset.id = item.id;
 
     const main = el("div", "cred-card__main");
-    main.append(el("h3", "cred-card__title", item.title), el("p", "cred-card__username", item.username));
+    const text = el("div", "cred-card__text");
+    text.append(el("h3", "cred-card__title", item.title), el("p", "cred-card__username", item.username));
+    main.append(el("span", "cred-card__avatar", Array.from(String(item.title || "?"))[0] || "?"), text);
+    main.querySelector(".cred-card__avatar").setAttribute("aria-hidden", "true");
 
     const actions = el("div", "cred-card__actions");
-    const copyUser = iconButton("copy-user", "Copiar usuário", "&#128100;");
-    const copyPass = iconButton("copy-pass", "Copiar senha", "&#128273;");
-    actions.append(copyUser, copyPass);
-    if (safeHttpUrl(item.url)) actions.append(iconButton("open-url", "Abrir o site e copiar login e senha", "&#128279;"));
-    actions.append(iconButton("edit", "Editar credencial", "&#9998;"), iconButton("delete", "Excluir credencial", "&#128465;"));
+    const copyUser = iconButton("copy-user", "Copiar usuário", ICONS.user, "Usuário");
+    const copyPass = iconButton("copy-pass", "Copiar senha", ICONS.key, "Senha");
+    actions.append(copyUser, copyPass, el("span", "cred-card__spacer"));
+    if (safeHttpUrl(item.url)) actions.append(iconButton("open-url", "Abrir o site e copiar login e senha", ICONS.external));
+    actions.append(iconButton("edit", "Editar credencial", ICONS.edit), iconButton("delete", "Excluir credencial", ICONS.trash));
 
     copyUser.addEventListener("click", () => copySecret(item.username, "Usuário copiado"));
     copyPass.addEventListener("click", () => copySecret(item.password, "Senha copiada"));

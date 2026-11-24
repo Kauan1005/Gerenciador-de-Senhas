@@ -12,3 +12,4 @@ Thumbs.db
 tests/.tmp/
 
 .netlify/
+tests/shots/

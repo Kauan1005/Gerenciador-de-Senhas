@@ -7,41 +7,16 @@
   <link rel="icon" type="image/svg+xml" href="img/logo.svg" />
   <link rel="icon" type="image/png" href="img/logo.png" />
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/modal.css" />
   <link rel="stylesheet" href="css/vault.css" />
   <link rel="stylesheet" href="css/projects.css" />
-    <!-- MODAL: chave de recuperação nova (mostrada uma única vez) -->
-  <div class="modal-backdrop" id="recovery-code-modal" hidden>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="recovery-code-title">
-      <div class="modal__header">
-        <h2 class="modal__title" id="recovery-code-title">Guarde sua chave de recuperação</h2>
-      </div>
-      <div class="modal__body">
-        <p class="panel__hint">
-          Se você esquecer a senha mestra, só esta chave permite recuperar o cofre sem perder as credenciais salvas.
-          Ela <strong>não será mostrada de novo</strong>. A chave antiga deixa de valer. Anote em papel ou guarde no seu
-          gerenciador de senhas, não só neste computador.
-        </p>
-        <p class="recovery-code" id="recovery-code-display"></p>
-        <label class="checkbox-field">
-          <input type="checkbox" id="recovery-code-confirm" />
-          Eu salvei minha chave de recuperação em um local seguro.
-        </label>
-      </div>
-      <div class="modal__footer">
-        <div class="modal__footer-right">
-          <button type="button" class="btn btn--primary" id="recovery-code-continue" disabled>Continuar</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script src="js/theme.js"></script>
+    <script src="js/theme.js"></script>
 </head>
 <body class="vault-body">
 
   <header class="topbar">
     <div class="topbar__brand">
-      <img src="img/logo.png" alt="" class="brand__mark" />
+      <img src="img/logo.svg" alt="" class="brand__mark" />
       <span class="brand__name">Arca</span>
     </div>
 
@@ -51,7 +26,7 @@
     </nav>
 
     <label class="search" role="search">
-      <span class="search__icon" aria-hidden="true">&#128269;</span>
+      <span class="search__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
       <input type="search" id="search-input" placeholder="Pesquisar por site, usuário ou URL" autocomplete="off" />
     </label>
 
@@ -116,7 +91,7 @@
           <span class="field__label">Senha</span>
           <div class="field__wrap">
             <input type="password" id="cred-password" required />
-            <button type="button" class="field__toggle" data-toggle-for="cred-password" aria-label="Mostrar senha">&#128065;</button>
+            <button type="button" class="field__toggle" data-toggle-for="cred-password" aria-label="Mostrar senha"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
           </div>
         </label>
         <div class="field-actions">
@@ -161,6 +136,32 @@
     </div>
   </div>
 
+  <!-- MODAL: chave de recuperação nova (mostrada uma única vez) -->
+  <div class="modal-backdrop" id="recovery-code-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="recovery-code-title">
+      <div class="modal__header">
+        <h2 class="modal__title" id="recovery-code-title">Guarde sua chave de recuperação</h2>
+      </div>
+      <div class="modal__body">
+        <p class="panel__hint">
+          Se você esquecer a senha mestra, só esta chave permite recuperar o cofre sem perder as credenciais salvas.
+          Ela <strong>não será mostrada de novo</strong>. A chave antiga deixa de valer. Anote em papel ou guarde no seu
+          gerenciador de senhas, não só neste computador.
+        </p>
+        <p class="recovery-code" id="recovery-code-display"></p>
+        <label class="checkbox-field">
+          <input type="checkbox" id="recovery-code-confirm" />
+          Eu salvei minha chave de recuperação em um local seguro.
+        </label>
+      </div>
+      <div class="modal__footer">
+        <div class="modal__footer-right">
+          <button type="button" class="btn btn--primary" id="recovery-code-continue" disabled>Continuar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls,text/csv" hidden />
@@ -168,7 +169,7 @@
 
   <div class="lock-overlay" id="lock-overlay" hidden>
     <div class="lock-overlay__card">
-      <img src="img/logo.png" alt="" class="brand__mark" />
+      <img src="img/logo.svg" alt="" class="brand__mark" />
       <p class="lock-overlay__title">Cofre bloqueado</p>
       <p class="lock-overlay__hint">Por inatividade. Digite sua senha mestra para continuar.</p>
       <form id="unlock-form">

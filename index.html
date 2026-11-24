@@ -7,33 +7,52 @@
   <meta name="description" content="Gerenciador de senhas local-first com criptografia no navegador." />
   <link rel="icon" type="image/svg+xml" href="img/logo.svg" />
   <link rel="icon" type="image/png" href="img/logo.png" />
+  <meta name="color-scheme" content="dark light" />
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/modal.css" />
   <script src="js/theme.js"></script>
 </head>
-<body>
+<body class="auth-body">
 
-  <div class="dial" aria-hidden="true">
-    <svg viewBox="0 0 400 400" class="dial__svg">
-      <circle cx="200" cy="200" r="170" class="dial__ring dial__ring--outer" />
-      <circle cx="200" cy="200" r="130" class="dial__ring dial__ring--mid" />
-      <circle cx="200" cy="200" r="90"  class="dial__ring dial__ring--inner" />
-      <line x1="200" y1="30" x2="200" y2="60" class="dial__tick" />
-      <line x1="200" y1="340" x2="200" y2="370" class="dial__tick" />
-      <line x1="30" y1="200" x2="60" y2="200" class="dial__tick" />
-      <line x1="340" y1="200" x2="370" y2="200" class="dial__tick" />
-    </svg>
-  </div>
+  <div class="auth">
+    <aside class="auth__aside">
+      <div class="brand">
+        <img src="img/logo.svg" alt="" class="brand__mark" />
+        <span class="brand__name">Arca</span>
+      </div>
 
-  <button class="btn btn--ghost btn--small theme-toggle-fixed" data-theme-toggle>Tema claro</button>
+      <div class="auth__pitch">
+        <div>
+          <h2 class="auth__headline">Senhas e projetos, trancados no seu navegador.</h2>
+          <p class="auth__lede">Tudo é cifrado aqui antes de sair. Só você abre.</p>
+        </div>
+        <ul class="auth__points">
+          <li>
+            <span class="auth__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+            <span><strong>Cifrado no seu navegador</strong>A senha mestra nunca é enviada a ninguém.</span>
+          </li>
+          <li>
+            <span class="auth__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3M14 9l2 2"/></svg></span>
+            <span><strong>Chave de recuperação</strong>Esqueceu a senha? A chave que você guardou reabre o cofre.</span>
+          </li>
+          <li>
+            <span class="auth__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+            <span><strong>Projetos num só lugar</strong>Banco de dados, hospedagem e arquivos de cada projeto.</span>
+          </li>
+        </ul>
+      </div>
 
-  <main class="screen">
-    <header class="brand">
-      <img src="img/logo.png" alt="" class="brand__mark" />
-      <span class="brand__name">Arca</span>
-    </header>
+      <p class="auth__foot">Criptografia AES-256 &middot; <a href="privacidade.html">Política de privacidade</a></p>
+    </aside>
 
-    <section class="card" role="region" aria-label="Acesso ao cofre">
+    <main class="auth__main">
+      <button class="btn btn--ghost btn--small theme-toggle-fixed" data-theme-toggle>Tema claro</button>
+
+      <div class="auth__panel" role="region" aria-label="Acesso ao cofre">
+        <div class="brand">
+          <img src="img/logo.svg" alt="" class="brand__mark" />
+          <span class="brand__name">Arca</span>
+        </div>
 
       <div class="tabs" role="tablist">
         <button class="tab is-active" id="tab-login" role="tab" aria-selected="true" aria-controls="panel-login" data-target="panel-login">
@@ -46,6 +65,7 @@
 
       <!-- PAINEL: LOGIN -->
       <form class="panel is-active" id="panel-login" role="tabpanel" aria-labelledby="tab-login">
+        <h1 class="panel__title">Entre na sua Arca</h1>
         <p class="panel__hint">Sua senha mestra nunca sai deste navegador.</p>
 
         <label class="field">
@@ -57,7 +77,7 @@
           <span class="field__label">Senha mestra</span>
           <div class="field__wrap">
             <input type="password" name="password" id="login-password" autocomplete="current-password" required minlength="5" />
-            <button type="button" class="field__toggle" data-toggle-for="login-password" aria-label="Mostrar senha">&#128065;</button>
+            <button type="button" class="field__toggle" data-toggle-for="login-password" aria-label="Mostrar senha"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
           </div>
         </label>
 
@@ -75,7 +95,8 @@
 
       <!-- PAINEL: CRIAR COFRE -->
       <form class="panel" id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" hidden>
-        <p class="panel__hint">Escolha uma senha mestra forte (mínimo 5 caracteres). Ela não pode ser recuperada se você a esquecer.</p>
+        <h1 class="panel__title">Crie seu cofre</h1>
+        <p class="panel__hint">Escolha uma senha mestra forte (mínimo 5 caracteres). Ela não pode ser recuperada se você a esquecer; guarde a chave de recuperação que vamos mostrar.</p>
 
         <label class="field">
           <span class="field__label">E-mail</span>
@@ -86,7 +107,7 @@
           <span class="field__label">Senha mestra</span>
           <div class="field__wrap">
             <input type="password" name="password" id="signup-password" autocomplete="new-password" required minlength="5" />
-            <button type="button" class="field__toggle" data-toggle-for="signup-password" aria-label="Mostrar senha">&#128065;</button>
+            <button type="button" class="field__toggle" data-toggle-for="signup-password" aria-label="Mostrar senha"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
           </div>
         </label>
 
@@ -107,10 +128,9 @@
         </button>
       </form>
 
-    </section>
-
-    <p class="footnote">Criptografia AES-256 local &middot; nada é enviado sem antes ser cifrado &middot; <a href="privacidade.html">Política de privacidade</a></p>
-  </main>
+      </div>
+    </main>
+  </div>
 
   <!-- MODAL: chave de recuperação (exibida uma única vez, no cadastro) -->
   <div class="modal-backdrop" id="recovery-code-modal" hidden>
