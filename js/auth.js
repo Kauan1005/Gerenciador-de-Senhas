@@ -24,6 +24,7 @@ const VaultSession = {
   email: null,
   config: null,
   clear() {
+    if (typeof resumeClear === "function") resumeClear();
     this.key = null;
     this.userId = null;
     this.email = null;

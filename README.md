@@ -138,7 +138,7 @@ descrição, provedores, endereços, contas e nomes de arquivo, sempre localment
 - Servidor sem texto puro: credenciais, projetos e arquivos são blobs AES-256-GCM.
 - RLS em todas as tabelas e no Storage: cada usuário só alcança o que é seu.
 - Sem JavaScript de terceiros; CSP; SRI; sem scripts inline; conteúdo do cofre sempre desenhado como texto.
-- Bloqueio por inatividade (5 min), cópia com limpeza automática da área de transferência, gerador com `crypto.getRandomValues`.
+- Bloqueio por inatividade (3 h; F5 não bloqueia, configurável), cópia com limpeza automática da área de transferência, gerador com `crypto.getRandomValues`.
 - Exportar em texto puro exige reconfirmar a senha mestra; CSV/Excel protegidos contra injeção de fórmula.
 - Troca de senha mestra em uma única transação (tudo ou nada).
 
@@ -221,3 +221,10 @@ Tema escuro por padrão (claro opcional no menu da conta), com a regra 60-30-10:
 (sucesso, alerta, perigo) são separadas do acento. Todos os tokens ficam no topo de `css/style.css`; trocar a cor da marca é mudar `--accent`
 (e o SVG em `img/logo.svg`). As fontes são as do sistema, porque a CSP não permite fontes de terceiros. Para ver as telas sem Supabase:
 `cd tests && node shots.mjs` (grava capturas em `tests/shots/`).
+
+## 14. Bloqueio do cofre
+
+- **Por inatividade: 3 horas** (`AUTO_LOCK_MINUTES: 180`). O relógio zera a cada movimento do mouse, tecla, clique ou rolagem. "Bloquear agora" (menu da conta) bloqueia na hora.
+- **Atualizar a página (F5) não bloqueia** (`KEEP_UNLOCKED: true`). Para isso, a chave do cofre (uma `CryptoKey` não exportável) fica guardada no
+  IndexedDB do navegador até a última atividade + 3 h, e é apagada ao bloquear, ao sair ou quando vence. Só vale com a sessão da aba do mesmo usuário.
+  Fechar a aba encerra a sessão (volta o login). Com `KEEP_UNLOCKED=false` (variável no Netlify) o F5 volta a pedir a senha mestra.

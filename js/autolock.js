@@ -17,12 +17,18 @@
 const AutoLockModule = (() => {
   let timer = null;
   let started = false;
-  const minutes = () => (window.APP_CONFIG && window.APP_CONFIG.AUTO_LOCK_MINUTES) || 5;
+  const minutes = () => (window.APP_CONFIG && window.APP_CONFIG.AUTO_LOCK_MINUTES) || 180;
+  let lastResume = 0;
 
   function resetTimer() {
     if (!window.VaultSession || !VaultSession.key) return; // já bloqueado
     clearTimeout(timer);
     timer = setTimeout(lock, minutes() * 60 * 1000);
+    // renova a validade da chave guardada para o F5 (no máximo 1 vez por minuto)
+    if (Date.now() - lastResume > 60000 && typeof resumePut === "function") {
+      lastResume = Date.now();
+      resumePut();
+    }
   }
 
   function lock() {
@@ -51,6 +57,7 @@ const AutoLockModule = (() => {
 
       VaultSession.key = key;
       VaultSession.config = config;
+      lastResume = 0;
       document.getElementById("lock-overlay").hidden = true;
       resetTimer();
       document.dispatchEvent(new CustomEvent("vault:unlocked"));
@@ -92,6 +99,7 @@ const AutoLockModule = (() => {
     document.getElementById("btn-unlock-logout")?.addEventListener("click", async () => {
       await sb.auth.signOut();
       VaultSession.clear();
+      if (typeof resumeClear === "function") await resumeClear();
       window.location.href = "index.html";
     });
   }

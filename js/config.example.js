@@ -5,7 +5,8 @@ window.APP_CONFIG = {
   SUPABASE_ANON_KEY: "sua-chave-PUBLICA-anon-aqui", // nunca a service_role / secret
 
   KDF_ITERATIONS: 600000,       // custo do PBKDF2 na derivação da chave (mínimo aceito: 100000)
-  AUTO_LOCK_MINUTES: 5,         // bloqueio automático por inatividade
+  AUTO_LOCK_MINUTES: 180,       // bloqueio automático por inatividade (3 horas)
+  KEEP_UNLOCKED: true,          // true = recarregar a página (F5) não bloqueia; false = F5 volta a pedir a senha mestra
   CLIPBOARD_CLEAR_SECONDS: 20,  // limpeza automática da área de transferência
   MAX_FILE_MB: 50,              // limite por arquivo de projeto (teto do plano gratuito do Supabase)
   GOOGLE_CLIENT_ID: "",         // opcional: ID do cliente OAuth (Google Cloud). Preenchido, cada pessoa guarda os arquivos no PRÓPRIO Google Drive

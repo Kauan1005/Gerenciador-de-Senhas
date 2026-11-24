@@ -47,7 +47,64 @@ async function handoffPut() {
     });
     db.close();
   } catch (_) { /* sem IndexedDB: a próxima página só pede a senha mestra */ }
+  await resumePut();
 }
+
+/* ---------- manter desbloqueado ao recarregar (F5) ----------
+   A DEK é uma CryptoKey NÃO exportável: o navegador a guarda no IndexedDB sem expor os bytes.
+   Fica lá no máximo até (última atividade + AUTO_LOCK_MINUTES) e é APAGADA ao bloquear, ao sair
+   ou quando vence. Só vale se a sessão do Supabase da aba for do mesmo usuário.
+   Desligue com KEEP_UNLOCKED: false (aí recarregar volta a pedir a senha mestra). */
+
+const RESUME_KEY = "r";
+const keepUnlocked = () => !(window.APP_CONFIG && window.APP_CONFIG.KEEP_UNLOCKED === false);
+const lockWindowMs = () => ((window.APP_CONFIG && window.APP_CONFIG.AUTO_LOCK_MINUTES) || 180) * 60 * 1000;
+
+async function resumePut() {
+  try {
+    if (!keepUnlocked() || !VaultSession.key || !VaultSession.userId) return;
+    const db = await handoffDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction("h", "readwrite");
+      tx.objectStore("h").put({ key: VaultSession.key, userId: VaultSession.userId, expiresAt: Date.now() + lockWindowMs() }, RESUME_KEY);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  } catch (_) { /* sem IndexedDB: recarregar pede a senha mestra */ }
+}
+
+async function resumeClear() {
+  try {
+    const db = await handoffDb();
+    await new Promise((resolve) => {
+      const tx = db.transaction("h", "readwrite");
+      tx.objectStore("h").delete(RESUME_KEY);
+      tx.oncomplete = resolve;
+      tx.onerror = resolve;
+    });
+    db.close();
+  } catch (_) { /* ignora */ }
+}
+
+async function resumeTake() {
+  try {
+    if (!keepUnlocked()) return null;
+    const db = await handoffDb();
+    const value = await new Promise((resolve, reject) => {
+      const tx = db.transaction("h", "readonly");
+      const get = tx.objectStore("h").get(RESUME_KEY);
+      get.onsuccess = () => resolve(get.result);
+      get.onerror = () => reject(get.error);
+    });
+    db.close();
+    if (value && value.expiresAt > Date.now()) return value;
+    if (value) await resumeClear(); // venceu
+  } catch (_) { /* ignora */ }
+  return null;
+}
+window.resumePut = resumePut;
+window.resumeClear = resumeClear;
 
 async function handoffTake() {
   try {
@@ -84,6 +141,18 @@ async function guardSession() {
       if (config) {
         VaultSession.key = passed.key;
         VaultSession.config = config;
+        return true;
+      }
+    } catch (_) { /* cai no pedido da senha mestra */ }
+  }
+  const resumed = await resumeTake();
+  if (resumed && resumed.userId === session.user.id) {
+    try {
+      const config = await AuthModule.fetchVaultConfig(session.user.id);
+      if (config) {
+        VaultSession.key = resumed.key;
+        VaultSession.config = config;
+        resumePut(); // renova a validade
         return true;
       }
     } catch (_) { /* cai no pedido da senha mestra */ }
@@ -132,6 +201,7 @@ function promptUnlock() {
         }
         VaultSession.key = key;
         VaultSession.config = config;
+        resumePut();
         input.value = "";
         cleanup();
         overlay.hidden = true;
@@ -259,3 +329,6 @@ window.el = el;
 window.toast = toast;
 window.escapeHtml = escapeHtml;
 window.safeHttpUrl = safeHttpUrl;
+
+// Bloqueou (manual ou por inatividade): a chave guardada para o F5 é apagada.
+document.addEventListener("vault:locked", () => { resumeClear(); });

@@ -37,6 +37,7 @@ export async function startServer(configOverrides = {}) {
     SUPABASE_ANON_KEY: "anon-de-teste",
     KDF_ITERATIONS: 200000,
     AUTO_LOCK_MINUTES: 5,
+    KEEP_UNLOCKED: false,
     CLIPBOARD_CLEAR_SECONDS: 20,
     MAX_FILE_MB: 50,
     MIN_MASTER_LENGTH: 5,
