@@ -54,8 +54,9 @@ ok(s1 !== s3 && s1 !== s4, "muda com o e-mail e com a senha");
 ok(!s1.includes("Senha-Mestra") && s1 !== "Senha-Mestra-De-Teste-1" && C.base64ToBuf(s1).byteLength === 32, "não contém a senha mestra e tem 256 bits");
 
 // ---------------- senha mestra
-ok(C.masterPasswordProblem("curta123") !== null, "senha mestra curta é recusada");
-ok(C.masterPasswordProblem("aaaaaaaaaaaaaaaa") !== null, "senha repetitiva é recusada");
+ok(C.MIN_MASTER_LENGTH === 5 && C.masterPasswordProblem("abcd") !== null, "senha mestra com menos de 5 caracteres é recusada");
+ok(C.masterPasswordProblem("abcde") === null && C.masterPasswordProblem("12345") === null, "com 5 caracteres a senha é aceita");
+ok(C.masterPasswordProblem("aaaaaaaaaaaaaaaa") !== null, "um único caractere repetido é recusado");
 ok(C.masterPasswordProblem("123456789012") !== null, "senha conhecida é recusada");
 ok(C.masterPasswordProblem("Cavalo-Grampo-Bateria-9") === null, "uma boa frase-senha é aceita");
 

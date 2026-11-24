@@ -373,6 +373,29 @@ try {
     await ctx.close();
   }
 
+  // ================= 5b) senha mestra mínima de 5 caracteres
+  {
+    const { ctx, page } = await open();
+    await page.goto(server.url + "/index.html");
+    await page.click("#tab-signup");
+    await page.fill("#signup-email", "curta@exemplo.com");
+    await page.evaluate(() => { for (const id of ["signup-password", "signup-password-confirm"]) document.getElementById(id).removeAttribute("minlength"); }); // deixa o app (e não o navegador) validar
+    await page.fill("#signup-password", "abcd");
+    await page.fill("#signup-password-confirm", "abcd");
+    await page.click("#signup-submit");
+    ok(await until(async () => (await page.locator("#signup-error").innerText()).includes("pelo menos 5")), "cadastro: 4 caracteres é recusado, com a mensagem do mínimo de 5");
+    ok((((await db(page)) || { users: [] }).users).length === 0, "e nada foi enviado ao servidor");
+    await page.fill("#signup-password", "abcde");
+    await page.fill("#signup-password-confirm", "abcde");
+    await page.click("#signup-submit");
+    await page.waitForURL("**/vault.html");
+    await addCredential(page, { title: "Com senha curta", password: "x" });
+    await page.reload();
+    await unlock(page, "abcde");
+    ok(await until(async () => (await cards(page)).includes("Com senha curta")), "com 5 caracteres o cofre é criado, bloqueia e desbloqueia normalmente");
+    await ctx.close();
+  }
+
   // ================= 6) auto-bloqueio por inatividade (relógio simulado)
   {
     const { ctx, page } = await open();

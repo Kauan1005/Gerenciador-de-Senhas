@@ -37,7 +37,7 @@ export async function startServer(configOverrides = {}) {
     AUTO_LOCK_MINUTES: 5,
     CLIPBOARD_CLEAR_SECONDS: 20,
     MAX_FILE_MB: 50,
-    MIN_MASTER_LENGTH: 12,
+    MIN_MASTER_LENGTH: 5,
     SESSION_STORE: "tab",
     LEGACY_LOGIN: true,
     ...configOverrides

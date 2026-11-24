@@ -25,7 +25,7 @@ automatizados de cada correção (`tests/`).
 | 6 | Média | **Troca de senha mestra não atômica** (falha no meio deixava registros ilegíveis). | `rotate_vault()`: uma transação que confere que **todos** os registros foram re-cifrados; o segredo de login volta ao anterior se falhar. | e2e: falha simulada não muda nada |
 | 7 | Média | Servidor podia devolver `kdf_iterations` baixo e enfraquecer a derivação; README (250 mil) e config (600 mil) divergiam. | Piso de 100.000 no cliente; aviso e ação "Reforçar criptografia" para cofres antigos; README corrigido. | crypto: piso recusado |
 | 8 | Média | Exportar para Excel gerava **texto puro** com um clique; células com `=`, `+`, `-`, `@` viravam **fórmula** (injeção em planilha). | Exige **reconfirmar a senha mestra**; prefixo `'` nas células perigosas; CSV nativo. | e2e |
-| 9 | Média | Senha mestra mínima de **8** caracteres. | Mínimo **12**, recusa repetitivas e conhecidas. | crypto, e2e |
+| 9 | Baixa | Senha mestra mínima de 8 caracteres e sem checagem de senhas conhecidas. | Mínimo de **5** caracteres (**escolha do dono**), recusa um único caractere repetido e senhas muito conhecidas, e barra de força. Veja o risco 3 abaixo. | crypto, e2e |
 | 10 | Baixa | O site publicava a **raiz inteira** (`README.md`, `config.example.js`...). | Publica só `dist/`, montado por `scripts/build.mjs`; o build recusa chave `service_role`. | e2e: servidor não entrega README/SQL |
 | 11 | Baixa | Sessão do Supabase em `localStorage` (sobrevive ao fechar o navegador). | Padrão: `sessionStorage` (só na aba). Opção `SESSION_STORE: "browser"`. | e2e |
 | 12 | Baixa | O **esquema e a RLS não estavam no repositório** (o README citava um `schema.sql` que não existia). | `supabase/schema.sql` idempotente: redefine RLS removendo regras antigas, `anon` sem acesso, limites de tamanho. | revisado; **aplicar no banco é um passo seu** |
@@ -34,13 +34,19 @@ automatizados de cada correção (`tests/`).
 
 ## Riscos que restam (decisões suas)
 
-1. **Cadastro aberto, sem confirmação de e-mail.** O Auth do projeto está com `disable_signup: false` e `mailer_autoconfirm: true`:
-   qualquer pessoa pode criar um cofre e ocupar espaço (banco e Storage). Se o cofre é só seu e da equipe, depois de criar as contas
-   desative em **Supabase > Authentication > Sign In / Providers > "Allow new users to sign up"**.
+1. **Cadastro aberto a qualquer pessoa, sem confirmação de e-mail (decisão do dono).** O Auth do projeto está com
+   `disable_signup: false` e `mailer_autoconfirm: true`, e assim fica: não há restrição para criar um cofre. Isso **não expõe os
+   dados de ninguém** (a RLS isola cada usuário e tudo é cifrado), mas todos os cofres dividem a **mesma cota gratuita** do Supabase
+   (~1 GB de arquivos, banco e tráfego). Uma conta que suba muitos arquivos grandes pode esgotar a cota de todos; nesse caso o
+   Supabase bloqueia novos envios até renovar o ciclo. Sinais para acompanhar: Supabase > Reports/Usage (Storage e Database).
+   Se um dia isso incomodar, as saídas que **não** fecham o cadastro são: limitar o tamanho/quantidade por usuário (via SQL) ou
+   reduzir `MAX_FILE_MB` em `config.js`. Fechar o cadastro continua sendo só um interruptor no painel, se você mudar de ideia.
 2. **Sem segundo fator no login do Supabase.** Como tudo é cifrado no cliente, quem entrar no Auth só leva blobs ilegíveis; ainda assim,
    o MFA (TOTP, gratuito) dificulta ataques de força bruta contra a senha mestra. Opcional.
-3. **A senha mestra continua sendo o ponto único.** Quem tiver os blobs pode tentar adivinhá-la offline; o custo de 600.000 iterações
-   ajuda, mas só uma senha forte (frase longa) protege de verdade. Não há recuperação.
+3. **A senha mestra continua sendo o ponto único, e o mínimo é só 5 caracteres (decisão do dono).** Quem tiver os blobs (por exemplo, um
+   acesso indevido ao banco) pode tentar adivinhá-la offline, e o custo de 600.000 iterações **não compensa** uma senha curta: uma de
+   5 caracteres cai em horas ou menos. Para dados que valem a pena proteger, use uma frase longa; o mínimo de 5 só vale para o que você
+   aceitar arriscar. Não há recuperação se a senha for esquecida.
 4. **`LEGACY_LOGIN: true` durante a migração.** Enquanto ligado, uma senha errada pode ser enviada ao servidor numa segunda tentativa
    (compatibilidade com contas antigas). Desligue assim que todas as contas migrarem (README, seção 10).
 5. **Arquivos de projeto ficam no Storage do mesmo Supabase.** Estão cifrados, mas o Storage tem teto de ~1 GB no plano gratuito.

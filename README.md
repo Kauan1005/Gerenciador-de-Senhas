@@ -130,7 +130,7 @@ descrição, provedores, endereços, contas e nomes de arquivo, sempre localment
 
 ## 8. Segurança, em resumo
 
-- A senha mestra nunca sai do navegador (login com segredo derivado), e não é recuperável: perdeu, perdeu os dados.
+- A senha mestra nunca sai do navegador (login com segredo derivado), e não é recuperável: perdeu, perdeu os dados. O mínimo é de 5 caracteres (configurável em `MIN_MASTER_LENGTH`), mas uma senha curta enfraquece muito a proteção: prefira uma frase longa.
 - Servidor sem texto puro: credenciais, projetos e arquivos são blobs AES-256-GCM.
 - RLS em todas as tabelas e no Storage: cada usuário só alcança o que é seu.
 - Sem JavaScript de terceiros; CSP; SRI; sem scripts inline; conteúdo do cofre sempre desenhado como texto.

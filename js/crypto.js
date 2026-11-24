@@ -31,7 +31,7 @@ const CryptoUtil = (() => {
   // comprometido "enfraqueça" a derivação devolvendo um número pequeno.
   const MIN_KDF_ITERATIONS = 100000;
   const DEFAULT_KDF_ITERATIONS = 600000;
-  const MIN_MASTER_LENGTH = 12;
+  const MIN_MASTER_LENGTH = 5;
 
   const FILE_MAGIC = [0x43, 0x46, 0x52, 0x31]; // "CFR1"
   const FILE_HEADER_BYTES = 16;
@@ -253,6 +253,7 @@ const CryptoUtil = (() => {
   // Heurística só para a barra de força; não é medição formal de entropia.
   function passwordStrengthScore(password) {
     let score = 0;
+    if (password.length >= 8) score++;
     if (password.length >= 12) score++;
     if (password.length >= 16) score++;
     if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
@@ -265,7 +266,7 @@ const CryptoUtil = (() => {
   // Devolve o motivo (texto) se a senha mestra não serve, ou null se serve.
   function masterPasswordProblem(password, minLength = MIN_MASTER_LENGTH) {
     if (password.length < minLength) return `A senha mestra precisa ter pelo menos ${minLength} caracteres.`;
-    if (new Set(password).size < 5) return "A senha mestra é repetitiva demais. Misture mais caracteres.";
+    if (new Set(password).size < 2) return "A senha mestra não pode ser um único caractere repetido.";
     if (COMMON.includes(password.toLowerCase())) return "Essa senha é conhecida demais. Escolha outra.";
     return null;
   }

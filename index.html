@@ -54,7 +54,7 @@
         <label class="field">
           <span class="field__label">Senha mestra</span>
           <div class="field__wrap">
-            <input type="password" name="password" id="login-password" autocomplete="current-password" required minlength="8" />
+            <input type="password" name="password" id="login-password" autocomplete="current-password" required minlength="5" />
             <button type="button" class="field__toggle" data-toggle-for="login-password" aria-label="Mostrar senha">&#128065;</button>
           </div>
         </label>
@@ -68,7 +68,7 @@
 
       <!-- PAINEL: CRIAR COFRE -->
       <form class="panel" id="panel-signup" role="tabpanel" aria-labelledby="tab-signup" hidden>
-        <p class="panel__hint">Escolha uma senha mestra forte (mínimo 12 caracteres). Ela não pode ser recuperada se você a esquecer.</p>
+        <p class="panel__hint">Escolha uma senha mestra forte (mínimo 5 caracteres). Ela não pode ser recuperada se você a esquecer.</p>
 
         <label class="field">
           <span class="field__label">E-mail</span>
@@ -78,14 +78,14 @@
         <label class="field">
           <span class="field__label">Senha mestra</span>
           <div class="field__wrap">
-            <input type="password" name="password" id="signup-password" autocomplete="new-password" required minlength="12" />
+            <input type="password" name="password" id="signup-password" autocomplete="new-password" required minlength="5" />
             <button type="button" class="field__toggle" data-toggle-for="signup-password" aria-label="Mostrar senha">&#128065;</button>
           </div>
         </label>
 
         <label class="field">
           <span class="field__label">Confirmar senha mestra</span>
-          <input type="password" name="password_confirm" id="signup-password-confirm" autocomplete="new-password" required minlength="12" />
+          <input type="password" name="password_confirm" id="signup-password-confirm" autocomplete="new-password" required minlength="5" />
         </label>
 
         <div class="strength" aria-hidden="true">
